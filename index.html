@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>АРМ ДСП Сокологірне</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=Oswald:wght@500;600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><h1>АРМ ДСП · Сокологірне</h1><small>Навчальна модель МПЦ · план від 28.10.2014</small></div>
+  <div class="clock-box"><span class="clock" id="clock">00:00:00</span><small id="dateLine">Доба 1 · умовна дата 28.10.2014</small></div>
+  <div class="ctrl">
+    <button id="btnPlay" class="on">⏸ Пауза</button>
+    <span class="seg" id="speedSeg"><button data-s="1" class="on">x1</button><button data-s="2">x2</button><button data-s="5">x5</button><button data-s="10">x10</button><button data-s="60">x60</button></span>
+    <button id="btnSkip" title="Прокрутити час до появи наступного поїзда">⏭ До події</button>
+    <button id="btnReset" class="danger">↺ Скинути добу</button>
+  </div>
+  <div class="ctrl">
+    <label><input type="checkbox" id="chkAuto" checked> Автодиспетчер</label>
+    <label><input type="checkbox" id="chkShunt"> Маневри (з припущеннями)</label>
+    <label>Після 23:59 <select id="selEnd"><option value="newday">новий день</option><option value="stop">зупинка</option></select></label>
+    <span class="seg" id="viewSeg"><button data-v="smooth" class="on">Плавний</button><button data-v="angular">Пультовий</button></span>
+  </div>
+</header>
+
+<div class="banner">Навчальна симуляція. Не підключена до реальної залізничної інфраструктури. Час подій у графіку вигаданий, це не архівний графік руху станції.</div>
+
+<div class="tabs" role="tablist">
+  <button id="tabSim" class="on" role="tab">Учбовий графік</button>
+  <button id="tabHist" role="tab">Історичні відомості</button>
+</div>
+
+<section id="viewSim">
+  <div class="scheme-wrap" id="schemeWrap">
+    <svg id="scheme" viewBox="0 55 2576 305" aria-label="Нитковий план станції Сокологірне"></svg>
+  </div>
+  <div class="toast" id="toast">Клацніть світлофор, стрілку або секцію, щоб відкрити панель команд.</div>
+
+  <div class="cols">
+    <div class="col">
+      <div class="card">
+        <h2>Найближча подія</h2>
+        <div id="nextBox" class="hint">—</div>
+      </div>
+      <div class="card">
+        <h2>Модельний графік на добу</h2>
+        <div class="tbl-wrap"><table id="evTable"><thead><tr><th>Час</th><th>Поїзд</th><th>Тип</th><th>Напрямок</th><th>Статус</th><th title="Затримка, хв">Затр.</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card"><h2>Панель об'єкта</h2><div id="rku" class="hint">Нічого не вибрано.</div></div>
+      <div class="card"><h2>Поїзд</h2><div id="trainBox" class="hint">Виберіть поїзд на схемі або в графіку.</div></div>
+      <div class="card">
+        <h2>Тестовий поїзд</h2>
+        <form id="testForm" class="form">
+          <label>Номер<input id="tNum" value="Т-1"></label>
+          <label>Напрямок<select id="tPar"><option value="odd">Непарний (на Партизани)</option><option value="even">Парний (на Якимівку)</option></select></label>
+          <label>Колія<select id="tTrack"></select></label>
+          <label>Через, хв<input id="tIn" type="number" min="0" value="0"></label>
+          <label>Стоянка, хв<input id="tStop" type="number" min="0" value="0"></label>
+          <label>&nbsp;<button type="submit">Створити</button></label>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Легенда</h2>
+        <div class="legend">
+          <div><span class="sw" style="background:var(--track)"></span>Секція вільна</div>
+          <div><span class="sw" style="background:var(--route)"></span>Замкнена в поїзному маршруті</div>
+          <div><span class="sw" style="background:var(--shunt)"></span>Замкнена в маневровому маршруті</div>
+          <div><span class="sw" style="background:var(--occ)"></span>Зайнята</div>
+          <div><span class="pill p-hist">план / джерело</span>Підтверджена історична інформація</div>
+          <div><span class="pill p-planned">модель</span>Модельний (вигаданий) час</div>
+          <div><span class="pill p-config">уточнити</span>Подія чекає уточнення топології</div>
+          <div><span class="pill p-delayed">затримано</span>Затримана подія</div>
+          <div><span class="pill p-conflict">конфлікт</span>Ворожий маршрут / відмова в журналі</div>
+          <div><span class="sw-label" style="font:600 12px var(--font-mono);color:var(--warn)">17</span>Стрілка в мінусі (білий номер — плюс)</div>
+        </div>
+      </div>
+    </div>
+    <div class="col col-log">
+      <div class="card">
+        <h2>Журнал подій</h2>
+        <div class="filters" id="logFilters">
+          <button data-f="all" class="on">Усі</button><button data-f="cmd">Команди</button><button data-f="train">Поїзди</button><button data-f="delay">Затримки</button><button data-f="error">Помилки</button>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="viewHist" hidden>
+  <div class="card"><h2>Історичні відомості (окремо від моделі)</h2><div class="hist-list" id="histList"></div></div>
+</section>
+
+<footer>Топологію змінюють у <code>js/topology.js</code>, графік і модельні параметри у <code>js/schedule.js</code>. Назви секцій (1СП, 9-17СП…) і мнемоніки команд умовні. Маневрові сигнали М1–М22 показано для орієнтації, маршрути від них не моделюються.</footer>
+
+<div id="modal" class="modal-bg" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="mTitle">Команда</h3>
+    <div id="mBody"></div>
+    <div class="btns"><button id="mOk">Виконати</button><button id="mCancel">Відмінити</button></div>
+  </div>
+</div>
+
+<script src="js/topology.js"></script>
+<script src="js/schedule.js"></script>
+<script src="js/history.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
