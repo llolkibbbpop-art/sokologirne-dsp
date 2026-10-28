@@ -18,12 +18,13 @@
     <span class="seg" id="speedSeg"><button data-s="1" class="on">x1</button><button data-s="2">x2</button><button data-s="5">x5</button><button data-s="10">x10</button><button data-s="60">x60</button></span>
     <button id="btnSkip" title="Прокрутити час до появи наступного поїзда">⏭ До події</button>
     <button id="btnReset" class="danger">↺ Скинути добу</button>
+    <button id="btnHelp" class="help-btn" title="Як приймати і відправляти поїзди" aria-label="Довідка">?</button>
   </div>
   <div class="ctrl">
-    <label><input type="checkbox" id="chkAuto" checked> Автодиспетчер</label>
+    <label title="Якщо увімкнено, маршрути задає система замість вас"><input type="checkbox" id="chkAuto"> Автодиспетчер</label>
+    <label title="Код пильності вписується в поле автоматично"><input type="checkbox" id="chkCode" checked> Підказувати код</label>
     <label><input type="checkbox" id="chkShunt"> Маневри (з припущеннями)</label>
     <label>Після 23:59 <select id="selEnd"><option value="newday">новий день</option><option value="stop">зупинка</option></select></label>
-    <span class="seg" id="viewSeg"><button data-v="smooth" class="on">Плавний</button><button data-v="angular">Пультовий</button></span>
   </div>
 </header>
 
@@ -36,7 +37,14 @@
 
 <section id="viewSim">
   <div class="scheme-wrap" id="schemeWrap">
-    <svg id="scheme" viewBox="0 55 2576 305" aria-label="Нитковий план станції Сокологірне"></svg>
+    <div class="indbar">
+      <div class="ind"><span class="ind-cap">МІСЦЕ УПРАВЛ.</span><span class="lamp-box on">АРМ ДСП</span></div>
+      <div class="ind"><span class="ind-cap">РЕЖИМ</span><span class="lamp-box" id="indAuto">РУЧНЕ</span></div>
+      <div class="ind"><span class="ind-cap">НАБІР МАРШРУТУ</span><span class="seg" id="modeSeg"><button data-m="train" class="on mode-train">ПОЇЗДН.</button><button data-m="shunt" class="mode-shunt">МАНЕВР.</button></span></div>
+      <div class="ind"><span class="ind-cap">СКАСУВАННЯ</span><span class="lamps"><span class="lamp-box red" id="indTrain" title="Скасування поїзного маршруту з витримкою 3 хв">ПОЇЗН.</span><span class="lamp-box red" id="indShunt" title="Скасування маневрового маршруту з витримкою 1 хв">МАНЕВР.</span></span></div>
+      <div class="ind"><span class="ind-cap">&nbsp;</span><span class="lamp-box red blinky" id="indIR" title="Штучне розмикання">ІР</span></div>
+    </div>
+    <svg id="scheme" viewBox="-165 48 2895 316" aria-label="Нитковий план станції Сокологірне"></svg>
   </div>
   <div class="toast" id="toast">Клацніть світлофор, стрілку або секцію, щоб відкрити панель команд.</div>
 
@@ -48,7 +56,7 @@
       </div>
       <div class="card">
         <h2>Модельний графік на добу</h2>
-        <div class="tbl-wrap"><table id="evTable"><thead><tr><th>Час</th><th>Поїзд</th><th>Тип</th><th>Напрямок</th><th>Статус</th><th title="Затримка, хв">Затр.</th></tr></thead><tbody></tbody></table></div>
+        <div class="tbl-wrap"><table id="evTable"><thead><tr><th>Час</th><th>Поїзд</th><th>Тип</th><th>Напрямок</th><th title="Рекомендована колія прийому (модель)">Колія</th><th>Статус</th><th title="Затримка, хв">Затр.</th></tr></thead><tbody></tbody></table></div>
       </div>
     </div>
     <div class="col">
@@ -68,16 +76,18 @@
       <div class="card">
         <h2>Легенда</h2>
         <div class="legend">
-          <div><span class="sw" style="background:var(--track)"></span>Секція вільна</div>
-          <div><span class="sw" style="background:var(--route)"></span>Замкнена в поїзному маршруті</div>
-          <div><span class="sw" style="background:var(--shunt)"></span>Замкнена в маневровому маршруті</div>
-          <div><span class="sw" style="background:var(--occ)"></span>Зайнята</div>
+          <div><span class="tube"></span>Блок вільний</div>
+          <div><span class="tube lk-train"></span>Замкнений у поїзному маршруті</div>
+          <div><span class="tube lk-shunt"></span>Замкнений у маневровому маршруті</div>
+          <div><span class="tube occ"></span>Зайнятий поїздом</div>
+          <div><span class="tube blocked"></span>Заблокований ДСП</div>
+          <div><span class="dot" style="background:#ff2b2b"></span><span class="dot" style="background:#2fe05a"></span>Поїзний світлофор: закритий / відкритий</div>
+          <div><span class="dot" style="background:#2f6bff"></span><span class="dot" style="background:#fff"></span>Маневровий: закритий / відкритий (білий)</div>
+          <div><span class="pill p-planned">модельний час</span>Вигаданий час графіка</div>
+          <div><span class="pill p-late">запізн. 5 хв</span>Поїзд запізнюється</div>
+          <div><span class="pill p-config">уточнити</span>Чекає уточнення топології</div>
           <div><span class="pill p-hist">план / джерело</span>Підтверджена історична інформація</div>
-          <div><span class="pill p-planned">модель</span>Модельний (вигаданий) час</div>
-          <div><span class="pill p-config">уточнити</span>Подія чекає уточнення топології</div>
-          <div><span class="pill p-delayed">затримано</span>Затримана подія</div>
-          <div><span class="pill p-conflict">конфлікт</span>Ворожий маршрут / відмова в журналі</div>
-          <div><span class="sw-label" style="font:600 12px var(--font-mono);color:var(--warn)">17</span>Стрілка в мінусі (білий номер — плюс)</div>
+          <div><b class="swnum">17</b>Жовтий номер: стрілка в мінусі</div>
         </div>
       </div>
     </div>
@@ -97,7 +107,34 @@
   <div class="card"><h2>Історичні відомості (окремо від моделі)</h2><div class="hist-list" id="histList"></div></div>
 </section>
 
-<footer>Топологію змінюють у <code>js/topology.js</code>, графік і модельні параметри у <code>js/schedule.js</code>. Назви секцій (1СП, 9-17СП…) і мнемоніки команд умовні. Маневрові сигнали М1–М22 показано для орієнтації, маршрути від них не моделюються.</footer>
+<footer>Топологію змінюють у <code>js/topology.js</code>, графік і модельні параметри у <code>js/schedule.js</code>. Назви блоків (1СП, IП-1…), поділ колій на блоки і довжини поїздів у блоках — модельні. Порожні кружки М1–М22 — маневрові світлофори, якими в моделі не керують.</footer>
+
+<div id="help" class="modal-bg" hidden>
+  <div class="modal help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <h3 id="helpTitle">Як працювати на пульті</h3>
+    <h4>Прийом поїзда</h4>
+    <ol>
+      <li>Дивіться «Найближча подія»: там напрямок і рекомендована колія.</li>
+      <li>Непарні (з Якимівки, ідуть праворуч) зустрічає вхідний <b>Н</b> зліва. Парні (з Партизан, ідуть ліворуч) — вхідний <b>Ч</b> справа.</li>
+      <li>Клацніть світлофор → у панелі об'єкта натисніть «Задати маршрут» біля потрібної колії → «Виконати». Стрілки переведуться самі, блоки маршруту обведуться зеленим, світлофор стане зеленим.</li>
+      <li>Поїзд заїде на колію. Блоки позаду нього звільняються самі.</li>
+    </ol>
+    <h4>Відправлення</h4>
+    <ol>
+      <li>Клацніть вихідний світлофор у кінці колії: для непарних <b>Н1, Н3, Н4, Н6</b> (праворуч), для парних <b>Ч2, Ч3, Ч4, Ч6</b> (ліворуч).</li>
+      <li>«Задати маршрут» на відправлення → «Виконати».</li>
+    </ol>
+    <h4>Якщо світлофор червоний</h4>
+    <p>Поїзд ніколи не їде на червоний: він стоїть, доки ви не відкриєте сигнал. Запізнення росте і показується червоним. Щоб маршрути ставила система, увімкніть «Автодиспетчер».</p>
+    <h4>Маневровий (білий) сигнал</h4>
+    <p>Над схемою перемкніть «НАБІР МАРШРУТУ» на <b>МАНЕВР.</b> і задайте маршрут: світлофор відкриється білим. Маневрові М13 і М9 завжди маневрові (синій — закрито, білий — відкрито).</p>
+    <h4>Відміна маршруту і код пильності</h4>
+    <p>Клацніть світлофор, з якого задано маршрут → «Відмінити». Це відповідальна команда: система показує тризначний код пильності (щоразу новий), його треба ввести в поле. Поки увімкнено «Підказувати код», код вписано заздалегідь — просто натисніть «Виконати». Якщо поїзд уже на наближенні, маршрут розмикається з витримкою (поїзний 3 хв, маневровий 1 хв), горить індикатор СКАСУВАННЯ.</p>
+    <h4>Чому відмова</h4>
+    <p>Маршрут не задається, якщо блок зайнятий, уже замкнений іншим маршрутом або стрілку замкнено. Причина пишеться під схемою і в журналі.</p>
+    <div class="btns"><button id="helpClose">Зрозуміло</button></div>
+  </div>
+</div>
 
 <div id="modal" class="modal-bg" hidden>
   <div class="modal" role="dialog" aria-modal="true">

@@ -21,13 +21,13 @@ window.TOPOLOGY = {
   nodes: {
     // Coordinates are pixels of the original plan image (2576 x 422).
     // lower main line, y=294 (odd trains → right)
-    A0:[10,294], A1:[70,294], S1:[235,294], A2:[470,294], S9:[545,294], S17:[606,294],
+    A0:[-150,294], A1:[70,294], S1:[235,294], A2:[470,294], S9:[545,294], S17:[606,294],
     A3:[700,294], A4:[1742,294], S10:[1893,294], A5:[1950,294], S8:[1999,294],
-    A6:[2150,294], S2:[2279,294], A7:[2422,294], A8:[2566,294],
+    A6:[2150,294], S2:[2279,294], A7:[2422,294], A8:[2720,294],
     // upper main line, y=257 (even trains → left)
-    B0:[10,257], B1:[190,257], S3:[339,257], S5:[380,257], S7:[441,257], B2:[500,257],
+    B0:[-150,257], B1:[190,257], S3:[339,257], S5:[380,257], S7:[441,257], B2:[500,257],
     B3:[1790,257], S14:[1818,257], B4:[1950,257], S6:[2104,257], B5:[2140,257],
-    S4:[2174,257], B6:[2460,257], B7:[2566,257],
+    S4:[2174,257], B6:[2460,257], B7:[2720,257],
     // track 4, y=223
     S11:[465,223], C1:[620,223], C2:[1630,223], S16:[1730,223],
     // track 6 / track 10, y=188
@@ -98,8 +98,8 @@ window.TOPOLOGY = {
   ],
   // dir: direction a train passes the signal; side: label above(-1)/below(+1) the track
   signals: [
-    { id:"Н",  node:"A1", dir:"R", side:1,  kind:"entry",  approach:"НП", source:"plan" },
-    { id:"Ч",  node:"B6", dir:"L", side:-1, kind:"entry",  approach:"ЧП", source:"plan" },
+    { id:"Н",  node:"A1", dir:"R", side:1,  kind:"entry",  approach:"1НП", approachChain:["2НП","1НП"], source:"plan" },
+    { id:"Ч",  node:"B6", dir:"L", side:-1, kind:"entry",  approach:"1ЧП", approachChain:["2ЧП","1ЧП"], source:"plan" },
     { id:"Н1", node:"A4", dir:"R", side:1,  kind:"exit", source:"plan" },
     { id:"Н3", node:"G2", dir:"R", side:1,  kind:"exit", source:"plan" },
     { id:"Н4", node:"C2", dir:"R", side:1,  kind:"exit", source:"plan" },
@@ -145,8 +145,8 @@ window.TOPOLOGY = {
   ],
   // Which exit signal a train meets at the end of a track, by train parity
   exitSignals: {
-    odd:  { "IП":"Н1", "3П":"Н3", "4П":"Н4", "6П":"Н6" },
-    even: { "IIП":"Ч2", "4П":"Ч4", "6П":"Ч6", "3П":"Ч3" }
+    odd:  { "IП-3":"Н1", "3П-3":"Н3", "4П-3":"Н4", "6П-3":"Н6" },
+    even: { "IIП-1":"Ч2", "4П-1":"Ч4", "6П-1":"Ч6", "3П-1":"Ч3" }
   },
   entrySignal: { odd:"Н", even:"Ч" },
   labels: [
@@ -154,3 +154,74 @@ window.TOPOLOGY = {
     ["I 846", 1200, 289], ["3 854", 1200, 322], ["10", 2060, 183], ["14", 420, 74], ["15", 420, 109]
   ]
 };
+
+/*
+ * Finer block division (model). Long sections are cut into several blocks so a
+ * train occupies only part of the station. Route paths and switch legs are
+ * updated automatically. Block boundaries inside tracks are a model choice,
+ * not real insulating joints from the plan.
+ */
+(function refine(T) {
+  function splitEdge(a, b, mids, secs) {
+    const i = T.edges.findIndex((e) => (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a));
+    if (i < 0) throw new Error("splitEdge: no edge " + a + "-" + b);
+    const opt = T.edges[i][3];
+    mids.forEach(([id, x, y]) => (T.nodes[id] = [x, y]));
+    const ids = mids.map((m) => m[0]);
+    const chain = [a, ...ids, b];
+    const repl = [];
+    for (let k = 0; k < chain.length - 1; k++) repl.push(opt ? [chain[k], chain[k + 1], secs[k], opt] : [chain[k], chain[k + 1], secs[k]]);
+    T.edges.splice(i, 1, ...repl);
+    T.switches.forEach((sw) => {
+      ["common", "plus", "minus"].forEach((leg) => {
+        if (sw.node === a && sw[leg] === b) sw[leg] = ids[0];
+        if (sw.node === b && sw[leg] === a) sw[leg] = ids[ids.length - 1];
+      });
+    });
+    T.routes.forEach((r) => {
+      for (let k = 0; k < r.path.length - 1; k++) {
+        if (r.path[k] === a && r.path[k + 1] === b) { r.path.splice(k + 1, 0, ...ids); break; }
+        if (r.path[k] === b && r.path[k + 1] === a) { r.path.splice(k + 1, 0, ...ids.slice().reverse()); break; }
+      }
+    });
+  }
+  function rename(a, b, sec) {
+    const e = T.edges.find((e) => (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a));
+    e[2] = sec;
+  }
+  // approach / departure: two blocks each
+  splitEdge("A0", "A1", [["AP", -40, 294]], ["2НП", "1НП"]);
+  splitEdge("B6", "B7", [["BP", 2590, 257]], ["1ЧП", "2ЧП"]);
+  splitEdge("A7", "A8", [["AX", 2570, 294]], ["1НУП", "2НУП"]);
+  splitEdge("B1", "B0", [["BX", 20, 257]], ["1ЧУП", "2ЧУП"]);
+  T.sectionInfo["2НП"] = { kind: "approach", len: 1200, label: "2-й блок наближення з Якимівки", source: "derived" };
+  T.sectionInfo["1НП"] = { kind: "approach", len: 1000, label: "1-й блок наближення з Якимівки", source: "derived" };
+  T.sectionInfo["2ЧП"] = { kind: "approach", len: 1200, label: "2-й блок наближення з Партизан", source: "derived" };
+  T.sectionInfo["1ЧП"] = { kind: "approach", len: 1000, label: "1-й блок наближення з Партизан", source: "derived" };
+  T.sectionInfo["1НУП"] = { kind: "exit", len: 800, label: "1-й блок віддалення на Партизани", source: "derived" };
+  T.sectionInfo["2НУП"] = { kind: "exit", len: 1000, label: "2-й блок віддалення на Партизани", source: "derived" };
+  T.sectionInfo["1ЧУП"] = { kind: "exit", len: 800, label: "1-й блок віддалення на Якимівку", source: "derived" };
+  T.sectionInfo["2ЧУП"] = { kind: "exit", len: 1000, label: "2-й блок віддалення на Якимівку", source: "derived" };
+  // one switch section per switch
+  splitEdge("S3", "S5", [["X35", 360, 257]], ["3СП", "5СП"]);
+  splitEdge("S5", "S7", [["X57", 410, 257]], ["5СП", "7СП"]);
+  splitEdge("S9", "S17", [["X917", 575, 294]], ["9СП", "17СП"]);
+  splitEdge("S11", "S13", [["X1113", 560, 188]], ["11СП", "13СП"]);
+  splitEdge("S20", "S18", [["X2018", 1607, 188]], ["20СП", "18СП"]);
+  rename("B1", "S3", "3СП"); rename("S5", "S11", "5СП"); rename("S7", "B2", "7СП");
+  rename("A2", "S9", "9СП"); rename("S7", "S9", "9СП"); rename("S17", "A3", "17СП"); rename("S17", "G1", "17СП");
+  rename("S11", "C1", "11СП"); rename("S13", "D2", "13СП"); rename("D3", "S20", "20СП"); rename("F3", "S20", "20СП"); rename("S18", "E1", "18СП");
+  // station tracks: three blocks each (numbered left to right)
+  const tracks = [["IП", "A3", "A4", 846, "Колія I"], ["IIП", "B2", "B3", 901, "Колія II"], ["3П", "G1", "G2", 854, "Колія 3"],
+                  ["4П", "C1", "C2", 830, "Колія 4"], ["6П", "D2", "D3", 624, "Колія 6"], ["8П", "F2", "F3", 607, "Колія 8"]];
+  tracks.forEach(([sec, a, b, len, name]) => {
+    const [x1, y] = T.nodes[a], x2 = T.nodes[b][0];
+    const m1 = Math.round(x1 + (x2 - x1) / 3), m2 = Math.round(x1 + (2 * (x2 - x1)) / 3);
+    splitEdge(a, b, [[sec + "a", m1, y], [sec + "b", m2, y]], [sec + "-1", sec + "-2", sec + "-3"]);
+    const src = T.sectionInfo[sec].source;
+    for (let k = 1; k <= 3; k++) T.sectionInfo[sec + "-" + k] = { kind: "track", group: sec, len: Math.round(len / 3), label: name + ", блок " + k + " з 3", source: src };
+    delete T.sectionInfo[sec];
+  });
+  ["10П", "14П", "15П"].forEach((s) => (T.sectionInfo[s].group = s));
+})(window.TOPOLOGY);
+
