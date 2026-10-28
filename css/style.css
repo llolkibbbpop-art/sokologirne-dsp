@@ -72,7 +72,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .tube-i.occ { stroke: var(--sch-occ); }
 .tube-o.blocked { stroke: #b9b9b9; }
 .tube-i.blocked { stroke: #7d7d7d; }
-.tube-o.off { stroke-opacity: .35; }
+.tube-o.off { stroke: #4a4a4a; }
+.tube-o.off.occ, .tube-o.off.lk-train, .tube-o.off.lk-shunt { stroke: #4a4a4a; }
+.tube-i.off { stroke: var(--sch-bg); }
 .tube-o.sel { stroke: #4ea3ff; }
 .blink { animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .25; } }
@@ -202,3 +204,49 @@ footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 90ch
 .adv-note { margin-top: 4px; color: var(--warn); }
 .modal.help ul { margin: 4px 0; padding-left: 20px; max-width: 70ch; }
 #genCtl { gap: 6px; }
+
+/* ---------- settings, zoom, phones ---------- */
+.settings { width: 100%; }
+.settings > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; list-style: none; display: none; padding: 6px 0; }
+.settings > summary::-webkit-details-marker { display: none; }
+.settings > summary::after { content: " ▾"; }
+.settings[open] > summary::after { content: " ▴"; }
+.sheet-close { display: none; float: right; padding: 0 9px; font-size: 14px; line-height: 1.6; }
+.scheme-wrap { -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
+.scheme-wrap svg { min-width: 0; }
+.zoom .seg button { min-width: 30px; }
+@media (max-width: 720px) {
+  body { padding-block: 8px 24px; }
+  .top { gap: 8px 12px; }
+  .brand h1 { font-size: 18px; }
+  .brand small { display: none; }
+  .clock { font-size: 24px; }
+  .ctrl button, .ctrl select, .ctrl input { padding: 7px 10px; }
+  #speedSeg button { padding: 7px 9px; }
+  #btnSkip, #btnReset { font-size: 13px; }
+  .settings > summary { display: block; }
+  .settings .ctrl { gap: 10px 12px; }
+  .settings .ctrl label { font-size: 13px; }
+  .banner { font-size: 11.5px; padding: 6px 8px; }
+  .indbar { gap: 8px 12px; padding: 6px 8px 2px; }
+  .ind-cap { font-size: 9.5px; }
+  .lamp-box { min-width: 0; padding: 3px 6px; font-size: 10px; }
+  .indbar .seg button { padding: 5px 8px; font-size: 10.5px; }
+  .toast { font-size: 12px; }
+  .cols { gap: 10px; }
+  /* object panel becomes a bottom sheet so commands appear right after a tap on the diagram */
+  .rku-card.open { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; margin: 0; max-height: 58vh; overflow-y: auto;
+    border-radius: 12px 12px 0 0; border-color: var(--accent); box-shadow: 0 -8px 24px rgba(0,0,0,.6);
+    padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .rku-card.open .sheet-close { display: inline-block; }
+  .rku-route { flex-direction: column; align-items: stretch; }
+  .rku-route .st { flex: none; }
+  .rku-card.open { max-height: 50vh; }
+  .rku-route .rbtns button { flex: 1; padding: 9px; }
+  .btns button { padding: 9px 12px; }
+  .tbl-wrap { max-height: 360px; }
+  th:nth-child(4), td:nth-child(4) { display: none; } /* direction column: arrow on the train number is enough */
+  .form { grid-template-columns: minmax(0, 1fr); }
+  .modal { padding: 14px; }
+}

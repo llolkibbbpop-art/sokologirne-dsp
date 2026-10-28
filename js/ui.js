@@ -30,7 +30,7 @@
   // ---------- diagram ----------
   const svg = $("scheme");
   const edgeEls = [], swEls = {}, sigEls = {};
-  let trainLayer;
+  let trainLayer, gXO, gXI;
   const swLegEdge = {};
   T.switches.forEach((s) => {
     swLegEdge[s.node + "|" + s.plus] = swLegEdge[s.plus + "|" + s.node] = { sw: s.id, leg: "+", node: s.node };
@@ -55,24 +55,25 @@
     note(-150, 225, "← ЯКИМІВКА · парний"); note(2440, 352, "ПАРТИЗАНИ · непарний →");
     note(330, 70, "Тяг. підст. ЕЧ-4"); note(2122, 176, "ПЧ-4"); note(2385, 205, "1272 км+302 м");
     el("line", { x1: 2375, y1: 195, x2: 2375, y2: 355, class: "border" }, svg);
-    const gOut = el("g", {}, svg), gIn = el("g", {}, svg), gHit = el("g", {}, svg);
+    // Draw order: sloped branches first, straight tracks on top. A branch therefore runs
+    // into the straight track and its end is hidden under it — every switch looks the same.
+    // Inactive switch legs go to the bottom layer, drawn whole but dim.
+    gXO = el("g", {}, svg); gXI = el("g", {}, svg);
+    const gSO = el("g", {}, svg), gSI = el("g", {}, svg), gO = el("g", {}, svg), gI = el("g", {}, svg), gHit = el("g", {}, svg);
     edgeEls.length = 0;
     T.edges.forEach(([a, b, sec]) => {
       const leg = swLegEdge[a + "|" + b];
-      // gaps: 3 px at insulating joints; a diverging (sloped) leg starts clear of the
-      // straight track so the lines never run into each other at a switch
       const sloped = pt(a)[1] !== pt(b)[1];
-      const cut = (n) => (isJoint(n) ? 3 : /^S/.test(n) && sloped ? 7 : 0);
+      const cut = (n) => (isJoint(n) ? 3 : 0);
       const ca = cut(a), cb = cut(b);
       const d = shrunk(a, b, ca, cb);
-      // an inactive switch leg is drawn cut back further from the switch point
-      const dOff = leg ? shrunk(a, b, leg.node === a ? 16 : ca, leg.node === b ? 16 : cb) : d;
-      const o = el("path", { d, class: "tube-o" }, gOut);
-      const i = el("path", { d, class: "tube-i" }, gIn);
+      const o = el("path", { d, class: "tube-o" }, sloped ? gSO : gO);
+      const i = el("path", { d, class: "tube-i" }, sloped ? gSI : gI);
+      const home = [sloped ? gSO : gO, sloped ? gSI : gI];
       const hit = el("path", { d, class: "hit" }, gHit);
       el("title", {}, hit).textContent = (D.sections[sec].label || "Стрілочна секція") + " · " + sec;
       hit.addEventListener("click", () => select({ kind: "sec", id: sec }));
-      edgeEls.push({ o, i, sec, leg, d, dOff, off: false });
+      edgeEls.push({ o, i, sec, leg, home, off: false });
     });
     T.labels.forEach(([t, x, y]) => (el("text", { x, y: y - 6, class: "trk-label" }, svg).textContent = t));
     [["2НП", -95], ["1НП", 15]].forEach(([t, x]) => (el("text", { x, y: 316, class: "blk-label" }, svg).textContent = t));
@@ -107,6 +108,7 @@
       const dir = s.dir === "R" ? 1 : -1;
       el("line", { x1: x, y1: yy - 6, x2: x, y2: yy + 6, class: "mast" }, g);
       el("line", { x1: x, y1: yy, x2: x + dir * 5, y2: yy, class: "mast" }, g);
+      el("rect", { x: Math.min(x, x + dir * 20) - 22, y: yy - 13, width: 64, height: 26, class: "sw-hit" }, g); // larger tap area
       const lamp = el("circle", { cx: x + dir * 12, cy: yy, r: 6.5, class: "lamp" }, g);
       const t = el("text", { x: dir > 0 ? x - 4 : x + 4, y: yy + 4, "text-anchor": dir > 0 ? "end" : "start" }, g); t.textContent = s.id;
       el("title", {}, g).textContent = "Світлофор " + s.id + (s.note ? " — " + s.note : "");
@@ -144,7 +146,7 @@
       if (ui.sel && ui.sel.kind === "sec" && ui.sel.id === e.sec) cls.push("sel");
       const c = cls.join(" ");
       if (e.c !== c) { e.o.setAttribute("class", "tube-o " + c); e.i.setAttribute("class", "tube-i " + c); e.c = c; }
-      if (e.off !== off) { e.o.setAttribute("d", off ? e.dOff : e.d); e.i.setAttribute("d", off ? e.dOff : e.d); e.off = off; }
+      if (e.off !== off) { (off ? gXO : e.home[0]).appendChild(e.o); (off ? gXI : e.home[1]).appendChild(e.i); e.off = off; }
     });
     for (const [id, e] of Object.entries(swEls)) {
       const st = S.sw[id];
@@ -189,7 +191,8 @@
 
   // ---------- panels ----------
   function toast(msg, kind) { const t = $("toast"); t.textContent = msg; t.className = "toast" + (kind ? " " + kind : ""); }
-  function select(o) { ui.sel = o; renderRku(); renderScheme(); }
+  function select(o) { ui.sel = o; renderRku(); renderScheme(); $("rkuCard").classList.toggle("open", !!o); }
+  $("rkuClose").onclick = () => select(null);
   const routeStateName = { set: "задано, світлофор закритий", open: "світлофор відкрито", used: "поїзд у маршруті", cancelling: "розмикання з витримкою…" };
 
   function renderRku() {
@@ -461,6 +464,22 @@
     if (now - lastRender > 120) { lastRender = now; refresh(); }
     requestAnimationFrame(frame);
   }
+  // zoom: width of the diagram in px (0 = fit the window)
+  const ZOOMS = [0, 1300, 1700, 2200, 2900];
+  ui.zoom = window.innerWidth >= 2200 ? 0 : 3;
+  function applyZoom() {
+    const w = ZOOMS[ui.zoom];
+    svg.style.width = w ? w + "px" : "100%";
+    svg.style.minWidth = w ? w + "px" : "0";
+  }
+  $("zoomSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const z = +b.dataset.z;
+    ui.zoom = z === 0 ? 0 : Math.max(0, Math.min(ZOOMS.length - 1, ui.zoom + z));
+    applyZoom();
+  });
+  applyZoom();
+  if (window.innerWidth < 720) $("settings").open = false;
   buildSvg();
   refresh(true);
   requestAnimationFrame(frame);

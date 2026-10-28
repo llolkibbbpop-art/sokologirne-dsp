@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1214">
 <title>АРМ ДСП Сокологірне</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,6 +21,8 @@
     <button id="btnReset" class="danger">↺ Скинути добу</button>
     <button id="btnHelp" class="help-btn" title="Як приймати і відправляти поїзди" aria-label="Довідка">?</button>
   </div>
+  <details class="settings" id="settings" open>
+  <summary>Налаштування</summary>
   <div class="ctrl">
     <label title="Якщо увімкнено, маршрути задає система замість вас"><input type="checkbox" id="chkAuto"> Автодиспетчер</label>
     <label title="Код пильності вписується в поле автоматично"><input type="checkbox" id="chkCode" checked> Підказувати код</label>
@@ -33,6 +36,7 @@
     </span>
     <label>Після 23:59 <select id="selEnd"><option value="newday">новий день</option><option value="stop">зупинка</option></select></label>
   </div>
+  </details>
 </header>
 
 <div class="banner">Навчальна симуляція. Не підключена до реальної залізничної інфраструктури. Час подій у графіку вигаданий, це не архівний графік руху станції.</div>
@@ -50,6 +54,7 @@
       <div class="ind"><span class="ind-cap">НАБІР МАРШРУТУ</span><span class="seg" id="modeSeg"><button data-m="train" class="on mode-train">ПОЇЗДН.</button><button data-m="shunt" class="mode-shunt">МАНЕВР.</button></span></div>
       <div class="ind"><span class="ind-cap">СКАСУВАННЯ</span><span class="lamps"><span class="lamp-box red" id="indTrain" title="Скасування поїзного маршруту з витримкою 3 хв">ПОЇЗН.</span><span class="lamp-box red" id="indShunt" title="Скасування маневрового маршруту з витримкою 1 хв">МАНЕВР.</span></span></div>
       <div class="ind"><span class="ind-cap">&nbsp;</span><span class="lamp-box red blinky" id="indIR" title="Штучне розмикання">ІР</span></div>
+      <div class="ind zoom"><span class="ind-cap">МАСШТАБ</span><span class="seg" id="zoomSeg"><button data-z="-1" aria-label="Зменшити">−</button><button data-z="0" title="Вся станція">▭</button><button data-z="1" aria-label="Збільшити">+</button></span></div>
     </div>
     <svg id="scheme" viewBox="-165 48 2895 316" aria-label="Нитковий план станції Сокологірне"></svg>
   </div>
@@ -67,7 +72,7 @@
       </div>
     </div>
     <div class="col">
-      <div class="card"><h2>Панель об'єкта</h2><div id="rku" class="hint">Нічого не вибрано.</div></div>
+      <div class="card rku-card" id="rkuCard"><h2>Панель об'єкта <button class="sheet-close" id="rkuClose" aria-label="Закрити панель">✕</button></h2><div id="rku" class="hint">Нічого не вибрано.</div></div>
       <div class="card"><h2>Поїзд</h2><div id="trainBox" class="hint">Виберіть поїзд на схемі або в графіку.</div></div>
       <div class="card">
         <h2>Тестовий поїзд</h2>

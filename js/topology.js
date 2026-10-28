@@ -116,9 +116,10 @@ window.TOPOLOGY = {
   ],
   // Shunting signals shown for orientation only (routes from them are not modelled)
   decorSignals: [
-    ["М1",215,309],["М3",226,272],["М5",489,309],["М7",667,200],["М11",720,277],
-    ["М22",1445,167],["М20",1730,176],["С30",1825,176],["М18",1752,272],["М16",1860,245],
-    ["М8",2086,281],["М6",2226,244],["М4",2252,272],["М2",2335,276]
+    // positions follow the square schematic: each signal stays on the same side of its switch as on the plan
+    ["М1",215,309],["М3",226,272],["М5",458,309],["М7",667,200],["М11",720,277],
+    ["М22",1445,167],["М20",1800,174],["С30",1885,174],["М18",1752,272],["М16",1860,245],
+    ["М8",2052,281],["М6",2226,244],["М4",2216,270],["М2",2335,276]
   ],
   // Route definitions: node path starting at the signal. Sections and switch
   // positions are derived from the path by the engine.
