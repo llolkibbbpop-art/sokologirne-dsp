@@ -14,7 +14,7 @@
   --warn: #ffb23e;        /* delay */
   --cfg: #b58cff;         /* needs clarification */
   --hist: #6aa7ff;        /* historical/confirmed */
-  --sch-bg: #5c5c5c;      /* console ground (handbook: background colour) */
+  --sch-bg: #000000;      /* console ground: black, white contours */
   --sch-line: #f0f0f0;    /* section contour */
   --sch-route: #3be05c;   /* contour of a section in a train route */
   --sch-shunt: #ffd23f;   /* contour of a section in a shunting route / minus switch */
@@ -62,17 +62,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .toast.ok { color: var(--route); }
 
 /* Console diagram — colours follow the handbook (табл. 2.14, 2.18–2.21) on a grey ground */
-.scheme-wrap { background: var(--sch-bg); border-color: #3c3c3c; }
+.scheme-wrap { background: var(--sch-bg); border-color: #333; }
 .scheme-wrap svg { min-width: 2000px; }
-.tube-o { fill: none; stroke: var(--sch-line); stroke-width: 11; stroke-linecap: butt; }
-.tube-i { fill: none; stroke: var(--sch-bg); stroke-width: 6; stroke-linecap: butt; }
+.tube-o { fill: none; stroke: var(--sch-line); stroke-width: 10; stroke-linecap: butt; }
+.tube-i { fill: none; stroke: var(--sch-bg); stroke-width: 5; stroke-linecap: butt; }
 .tube-o.lk-train { stroke: var(--sch-route); }
 .tube-o.lk-shunt { stroke: var(--sch-shunt); }
 .tube-i.lk-train, .tube-i.lk-shunt { stroke: var(--sch-locked); }
 .tube-i.occ { stroke: var(--sch-occ); }
 .tube-o.blocked { stroke: #b9b9b9; }
 .tube-i.blocked { stroke: #7d7d7d; }
-.tube-o.off { stroke-opacity: .45; }
+.tube-o.off { stroke-opacity: .35; }
 .tube-o.sel { stroke: #4ea3ff; }
 .blink { animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .25; } }
@@ -97,7 +97,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .blk-label { fill: #d6d6d6; font: 600 10px var(--font-mono); pointer-events: none; }
 .note { fill: #e3e3e3; font: 11px var(--font-ui); }
 .border { stroke: #d0d0d0; stroke-dasharray: 6 5; }
-.platform { fill: #8d8d8d; }
+.platform { fill: #3b3b3b; }
 .train rect { fill: #1d1d1d; stroke: #fff; stroke-width: 1.2; }
 .train.late rect { fill: #a3140f; stroke: #ffb0ab; }
 .train.test rect { fill: #10305a; }
@@ -198,3 +198,7 @@ td input { width: 52px; padding: 2px 4px; }
 .modal .code { font: 700 24px var(--font-mono); letter-spacing: .2em; color: var(--warn); }
 .modal .resp { color: var(--warn); font-size: 12.5px; }
 footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 90ch; }
+
+.adv-note { margin-top: 4px; color: var(--warn); }
+.modal.help ul { margin: 4px 0; padding-left: 20px; max-width: 70ch; }
+#genCtl { gap: 6px; }

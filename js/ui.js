@@ -4,7 +4,10 @@
   const T = window.TOPOLOGY, P = window.MODEL_PARAMS, E = window.SimEngine;
   const $ = (id) => document.getElementById(id);
   const NS = "http://www.w3.org/2000/svg";
-  let sim = E.createSim(T, window.SCHEDULE, P, { auto: false });
+  // timetable source: seeded generator (default) or the fixed JSON from the task
+  const src = { kind: "gen", seed: 2014, level: "medium" };
+  const scheduleSource = () => (src.kind === "gen" ? (day) => window.ScheduleGenerator.generate(src.seed, src.level, day) : window.SCHEDULE);
+  let sim = E.createSim(T, scheduleSource(), P, { auto: false });
   const D = sim.D;
   const ui = { running: true, speed: 1, mode: "train", sel: null, selTrain: null, selEvent: null, logFilter: "all", logCount: 0, autoCode: true };
   let seed = 20141028;
@@ -13,7 +16,7 @@
   // Signal lamp colours (handbook table 2.14). Set via style, not presentation attributes.
   const LAMP = { red: "#ff2b2b", green: "#2fe05a", white: "#ffffff", blue: "#2f6bff", off: "#5c5c5c" };
 
-  const pt = (n) => T.nodes[n];
+  const pt = (n) => (T.displayNodes && T.displayNodes[n]) || T.nodes[n];
   const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const trackName = (g) => (g ? "колія " + g.replace("П", "") : "");
@@ -56,10 +59,14 @@
     edgeEls.length = 0;
     T.edges.forEach(([a, b, sec]) => {
       const leg = swLegEdge[a + "|" + b];
-      const ca = isJoint(a) ? 3 : 0, cb = isJoint(b) ? 3 : 0;
+      // gaps: 3 px at insulating joints; a diverging (sloped) leg starts clear of the
+      // straight track so the lines never run into each other at a switch
+      const sloped = pt(a)[1] !== pt(b)[1];
+      const cut = (n) => (isJoint(n) ? 3 : /^S/.test(n) && sloped ? 7 : 0);
+      const ca = cut(a), cb = cut(b);
       const d = shrunk(a, b, ca, cb);
-      // an inactive switch leg is drawn cut back from the switch point
-      const dOff = leg ? shrunk(a, b, leg.node === a ? 12 : ca, leg.node === b ? 12 : cb) : d;
+      // an inactive switch leg is drawn cut back further from the switch point
+      const dOff = leg ? shrunk(a, b, leg.node === a ? 16 : ca, leg.node === b ? 16 : cb) : d;
       const o = el("path", { d, class: "tube-o" }, gOut);
       const i = el("path", { d, class: "tube-i" }, gIn);
       const hit = el("path", { d, class: "hit" }, gHit);
@@ -296,7 +303,7 @@
     }
     return ["p-planned", "модельний час"];
   };
-  const typeShort = { passenger: "пас.", freight: "ван.", shunting: "ман." };
+  const typeShort = { passenger: "пас.", freight: "ван.", shunting: "ман.", electric: "ел.", intercity: "ІС", test: "тест" };
 
   function renderEvents(full) {
     const S = sim.S, tb = $("evTable").tBodies[0];
@@ -319,7 +326,8 @@
 
   function adviceHtml(ev) {
     const a = advice(ev); if (!a) return "";
-    return `<div class="advice"><b>Порада ДСП:</b> прийміть на <b>${esc(a.track)}</b>. Клацніть світлофор <b>${esc(a.entry)}</b> → «Задати маршрут» <b>${esc(a.rIn || "")}</b>. Коли поїзд стане на колію, клацніть <b>${esc(a.exitSig || "")}</b> → «Задати маршрут» на відправлення.</div>`;
+    const note = ev.ev.note ? `<div class="adv-note">${esc(ev.ev.note)}</div>` : "";
+    return `<div class="advice"><b>Порада ДСП:</b> прийміть на <b>${esc(a.track)}</b>. Клацніть світлофор <b>${esc(a.entry)}</b> → «Задати маршрут» <b>${esc(a.rIn || "")}</b>. ${ev.ev.stopMin ? "Поїзд стоїть " + ev.ev.stopMin + " хв, потім" : "Коли поїзд підійде до кінця колії,"} клацніть <b>${esc(a.exitSig || "")}</b> → «Задати маршрут» на відправлення.${note}</div>`;
   }
 
   function renderNext() {
@@ -414,6 +422,15 @@
     sim.log("cmd", "Прокрутка часу на " + Math.round(n / 60) + " хв");
     refresh();
   };
+  function applySource(msg) {
+    sim.setSchedule(scheduleSource(), { auto: $("chkAuto").checked, endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
+    ui.sel = null; ui.selTrain = null; ui.selEvent = null; acc = 0;
+    toast(msg, "ok"); refresh(true);
+  }
+  $("selSrc").onchange = (e) => { src.kind = e.target.value; $("genCtl").hidden = src.kind !== "gen"; applySource(src.kind === "gen" ? "Згенеровано новий модельний графік." : "Завантажено графік із завдання (24 події)."); };
+  $("selLevel").onchange = (e) => { src.level = e.target.value; applySource("Інтенсивність змінено, графік перегенеровано."); };
+  $("btnGen").onclick = () => { src.seed = Math.max(1, Math.floor(+$("inSeed").value || 1)); applySource("Графік згенеровано, номер варіанта " + src.seed + "."); };
+  $("btnNewSeed").onclick = () => { src.seed = 1 + Math.floor(rnd() * 99999); $("inSeed").value = src.seed; applySource("Новий випадковий графік, номер варіанта " + src.seed + "."); };
   $("btnHelp").onclick = () => { $("help").hidden = false; $("helpClose").focus(); };
   $("helpClose").onclick = () => { $("help").hidden = true; };
   $("help").addEventListener("click", (e) => { if (e.target === $("help")) $("help").hidden = true; });

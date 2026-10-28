@@ -24,6 +24,13 @@
     <label title="Якщо увімкнено, маршрути задає система замість вас"><input type="checkbox" id="chkAuto"> Автодиспетчер</label>
     <label title="Код пильності вписується в поле автоматично"><input type="checkbox" id="chkCode" checked> Підказувати код</label>
     <label><input type="checkbox" id="chkShunt"> Маневри (з припущеннями)</label>
+    <label>Графік <select id="selSrc"><option value="gen" selected>генератор</option><option value="json">із завдання (JSON)</option></select></label>
+    <span class="ctrl" id="genCtl">
+      <label>Рух <select id="selLevel"><option value="low">рідкий</option><option value="medium" selected>середній</option><option value="high">інтенсивний</option></select></label>
+      <label title="Однаковий номер варіанта дає однаковий графік">Варіант <input id="inSeed" type="number" min="1" value="2014" style="width:80px"></label>
+      <button id="btnGen" type="button">Застосувати</button>
+      <button id="btnNewSeed" type="button" title="Випадковий новий графік">🎲 Новий</button>
+    </span>
     <label>Після 23:59 <select id="selEnd"><option value="newday">новий день</option><option value="stop">зупинка</option></select></label>
   </div>
 </header>
@@ -126,6 +133,14 @@
     </ol>
     <h4>Якщо світлофор червоний</h4>
     <p>Поїзд ніколи не їде на червоний: він стоїть, доки ви не відкриєте сигнал. Запізнення росте і показується червоним. Щоб маршрути ставила система, увімкніть «Автодиспетчер».</p>
+    <h4>Які поїзди куди приймати (правила моделі)</h4>
+    <ul>
+      <li><b>Інтерсіті (ІС)</b> і <b>пасажирські</b> без зупинки — тільки по головних коліях: непарні I, парні II.</li>
+      <li><b>Електропоїзди (ел.)</b> зупиняються на 1 хв — тільки на колію біля платформи: I або II (острівна платформа), непарний може на 3 (бокова платформа).</li>
+      <li><b>Вантажні</b> йдуть по головній. Якщо слідом іде швидший поїзд, вантажний приймають на бічну (3, 4 або 6) і тримають, доки швидший не пройде, — це <b>обгін</b>. Порада в графіку підкаже колію.</li>
+      <li>Одночасно на станції можуть бути поїзди обох напрямків: парні і непарні маршрути не ворожі, поки не перетинають ті самі стрілки.</li>
+      <li>Порушення (електричка на колії без платформи, пасажирський на бічній) пишеться в журнал фіолетовим.</li>
+    </ul>
     <h4>Маневровий (білий) сигнал</h4>
     <p>Над схемою перемкніть «НАБІР МАРШРУТУ» на <b>МАНЕВР.</b> і задайте маршрут: світлофор відкриється білим. Маневрові М13 і М9 завжди маневрові (синій — закрито, білий — відкрито).</p>
     <h4>Відміна маршруту і код пильності</h4>
@@ -146,6 +161,7 @@
 
 <script src="js/topology.js"></script>
 <script src="js/schedule.js"></script>
+<script src="js/generator.js"></script>
 <script src="js/history.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/ui.js"></script>

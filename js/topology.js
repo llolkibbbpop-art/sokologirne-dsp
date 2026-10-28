@@ -156,6 +156,18 @@ window.TOPOLOGY = {
 };
 
 /*
+ * Square schematic: display-only coordinates that turn every diverging branch into a
+ * 45° slope (|dx| = |dy|) between the same neighbours as on the plan. The
+ * interlocking uses only the topology, so these overrides change the picture only.
+ */
+window.TOPOLOGY.displayNodes = {
+  S3:[272,257], S11:[414,223], X1113:[449,188], A2:[440,294], S9:[478,294], G1:[639,327],
+  S15:[737,153], K9:[700,153], S19:[663,115], J14:[628,80],
+  F3:[1528,153], S18:[1749,188], E1:[1775,188], S16:[1784,223],
+  S10:[1776,294], S6:[2036,257], S2:[2211,294]
+};
+
+/*
  * Finer block division (model). Long sections are cut into several blocks so a
  * train occupies only part of the station. Route paths and switch legs are
  * updated automatically. Block boundaries inside tracks are a model choice,

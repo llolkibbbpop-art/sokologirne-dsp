@@ -65,14 +65,15 @@
       listeners.forEach((f) => f(e));
     }
 
+    const schedFor = (day) => (typeof SCHED === "function" ? SCHED(day) : SCHED);
     function buildEvents() {
-      return SCHED.events.map((ev, i) => {
+      return schedFor(S.day).events.map((ev, i) => {
         const parity = P.directionParity[ev.direction] || null;
         let needsConfig = null;
         if (ev.action === "shunting_sequence") {
           if (!S.shuntingEnabled) needsConfig = "маневровий сценарій вимкнено: призначення сигналу М9 (повернення з колії 14) — припущення, потребує підтвердження";
         } else if (!parity) needsConfig = "напрямок «" + ev.direction + "» не зіставлено з планом";
-        const rt = parity && P.recommendedTrack && P.recommendedTrack[ev.type] ? P.recommendedTrack[ev.type][parity] : null;
+        const rt = ev.recTrack || (parity && P.recommendedTrack && P.recommendedTrack[ev.type] ? P.recommendedTrack[ev.type][parity] : null);
         return {
           idx: i, ev, parity, needsConfig, recTrack: rt,
           time: parseHM(ev.time), delayMin: (S.delays[i] || 0),
@@ -251,7 +252,7 @@
       log("train", "Поїзд " + tr.num + " (" + typeName(tr.type) + ", " + tr.len + " бл.) з'явився на " + chain[0]);
       return tr;
     }
-    const typeName = (t) => ({ passenger: "пасажирський", freight: "вантажний", shunting: "маневровий", test: "тестовий" }[t] || t);
+    const typeName = (t) => ({ passenger: "пасажирський", freight: "вантажний", shunting: "маневровий", test: "тестовий", electric: "електропоїзд", intercity: "Інтерсіті" }[t] || t);
 
     function headSec(tr) { return tr.seq[tr.idx]; }
 
@@ -345,6 +346,15 @@
       while (tr.occ.length > tr.len) releaseSection(tr.occ.shift());
       if (ni.kind === "track" && tr.idx === tr.seq.length - 1) {
         tr.occ = tr.occ.filter((s) => { if (D.sections[s].group === ni.group) return true; releaseSection(s); return false; });
+        // model reception rules: a stopping passenger train needs a platform; fast passenger trains belong on main tracks
+        if (!tr.checkedTrack) {
+          tr.checkedTrack = true;
+          const plat = (P.platformTracks || []).includes(ni.group), main = (P.mainTracks || []).includes(ni.group);
+          if ((tr.type === "electric" || ((tr.type === "passenger" || tr.type === "intercity") && tr.stopSec)) && !plat)
+            log("warn", "Правило моделі: " + typeName(tr.type) + " " + tr.num + " із зупинкою прийнято на колію без платформи (" + ni.group + ")");
+          else if ((tr.type === "passenger" || tr.type === "intercity") && !main)
+            log("warn", "Правило моделі: " + typeName(tr.type) + " " + tr.num + " прийнято на бічну колію " + ni.group + " — лише за потреби, зі зниженою швидкістю");
+        }
       }
       tr.status = ni.kind === "exit" ? "відправлено" : ni.kind === "track" ? "на колії " + (ni.group || next).replace("П", "") : "рух по " + next;
       updateNextSignal(tr);
@@ -354,7 +364,7 @@
       if (tr.eventIdx == null) return;
       const ev = S.events[tr.eventIdx]; if (!ev) return;
       ev.status = "passed"; ev.passedAt = S.time;
-      const late = Math.round(((tr.passedAt || S.time) - ev.time) / 60);
+      const late = Math.round(((tr.passedAt || S.time) - ev.time - (ev.ev.stopMin || 0) * 60) / 60);
       ev.lateMin = late;
     }
 
@@ -376,7 +386,7 @@
           continue;
         }
         const pref = [ev.recTrack, ...P.trackPreference[ev.parity]].filter((v, k, a) => v && a.indexOf(v) === k);
-        const tr = spawnTrain({ num: ev.ev.train, type: ev.ev.type, parity: ev.parity, start, eventIdx: ev.idx, pref });
+        const tr = spawnTrain({ num: ev.ev.train, type: ev.ev.type, parity: ev.parity, start, eventIdx: ev.idx, pref, stopSec: (ev.ev.stopMin || 0) * 60 });
         ev.status = "active"; ev.trainId = tr.id;
       }
       for (const pt of S.pendingTests) {
@@ -425,7 +435,7 @@
       S.delays[idx] = min;
       const ev = S.events[idx];
       if (ev && (ev.status === "planned" || ev.status === "waiting")) ev.delayMin = min;
-      log("delay", "ДСП: затримка поїзда " + SCHED.events[idx].train + " = " + min + " хв");
+      log("delay", "ДСП: затримка поїзда " + (ev ? ev.ev.train : idx) + " = " + min + " хв");
     }
 
     function addTestTrain(o) {
@@ -439,7 +449,7 @@
     function lateMin(ev) {
       if (ev.status === "passed") return ev.lateMin || 0;
       if (ev.status === "config") return 0;
-      const late = Math.floor((S.time - ev.time) / 60);
+      const late = Math.floor((S.time - ev.time - (ev.ev.stopMin || 0) * 60) / 60);
       return late > 0 ? late : 0;
     }
 
@@ -455,8 +465,11 @@
         && !Object.values(S.sec).some((s) => s.artUntil != null) && S.pendingTests.every((p) => p.spawned);
     }
 
+    function setSchedule(src, o) { SCHED = src; reset(o); }
+
     reset(opts);
     return {
+      setSchedule,
       D, get S() { return S; }, reset, step, run, setRoute, openSignal, closeSignal, cancelRoute, moveSwitch,
       toggleSwitchLock, toggleSwitchBlock, toggleSectionBlock, artRelease, setDelay, addTestTrain, checkRoute,
       nextEvent, isIdle, lateMin, blocksFor, fmt, on: (f) => listeners.push(f), routeFromSignal, buildEvents: () => (S.events = buildEvents()),
