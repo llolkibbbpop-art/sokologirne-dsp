@@ -53,7 +53,7 @@
     };
     ["odd", "even"].forEach((par) => {
       // electric trains, roughly evenly spread 05:00–22:30
-      const nEl = Math.max(2, Math.round(6 * k));
+      const nEl = Math.max(3, Math.round(9 * k));
       for (let i = 0; i < nEl; i++) list.push({ m: 300 + (i + 0.5) * (1050 / nEl) + ri(-20, 20), type: "electric", par, n: num(6001, 98, par) });
       // long-distance passenger trains (no stop at this station in the model)
       const nP = Math.max(2, Math.round(4 * k));

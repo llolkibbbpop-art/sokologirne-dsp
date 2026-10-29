@@ -366,7 +366,7 @@
     const nP = Math.max(2, Math.round(3 * k));
     for (let i = 0; i < nP; i++) for (let tries = 0; tries < 6 && !pair("passenger", ri(300, 1080), ri(80, 220), true); tries++);
     // suburban diesel trains (cab at both ends: no runaround)
-    const nS = Math.max(3, Math.round(5 * k));
+    const nS = Math.max(4, Math.round(7 * k));
     for (let i = 0; i < nS; i++) for (let tries = 0; tries < 6 && !pair("suburban", 300 + (i + 0.5) * (960 / nS) + ri(-30, 30), ri(25, 55), false); tries++);
     // reserve locomotives and a household train
     for (let i = 0; i < Math.max(1, Math.round(2 * k)); i++) pair("reserve", ri(60, 1200), ri(30, 120), false);

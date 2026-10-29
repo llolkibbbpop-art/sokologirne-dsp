@@ -322,11 +322,11 @@
     // passenger trains Нікополь ↔ Запоріжжя 1, a few minutes at the platform
     tryN(Math.max(2, Math.round(4 * k)), () => (r() < 0.5 ? through("passenger", "N", "Z", ri(240, 1380), ri(2, 4)) : through("passenger", "Z", "N", ri(240, 1380), ri(2, 4))));
     // through electric trains
-    tryN(Math.max(3, Math.round(6 * k)), () => (r() < 0.5 ? through("electric", "N", "Z", ri(300, 1360), ri(1, 2)) : through("electric", "Z", "N", ri(300, 1360), ri(1, 2))));
+    tryN(Math.max(5, Math.round(10 * k)), () => (r() < 0.5 ? through("electric", "N", "Z", ri(300, 1360), ri(1, 2)) : through("electric", "Z", "N", ri(300, 1360), ri(1, 2))));
     // electric trains of the depot: arrive from Запоріжжя 1, go to the depot, later come out and leave
     let mn = 0;
     const shunt = (t, job, extra) => ev.push(Object.assign({ time: hm(t), train: "МН-" + String(++mn).padStart(2, "0"), type: "shunting", direction: "station", action: "shunting_sequence", job, timeStatus: "generated" }, extra || {}));
-    tryN(Math.max(1, Math.round(2 * k)), () => {
+    tryN(Math.max(2, Math.round(3 * k)), () => {
       const ta = slot("Z", ri(300, 900)); if (ta == null) return false;
       const out = ta + ri(120, 260), dir = r() < 0.5 ? "Z" : "N", td = slot(dir, out + 30);
       if (td == null || td > 1420 || !platFree(ta - 4, ta + 12) || !platFree(out, td + 2)) { unslot("Z", ta); if (td != null) unslot(dir, td); return false; }

@@ -527,6 +527,32 @@
       if (k === "approach") return entryOf(tr);
       return (T.exitSignals[tr.parity] || {})[last] || null;
     }
+    // sections of the later steps of one shunting movement (fixed signals only)
+    function laterShuntSections(t) {
+      const res = new Set(), plan = t.shunt.plan;
+      for (let i = t.shunt.step + 1; i < plan.length; i++) {
+        const g = plan[i]; if (!g.sig || g.sig[0] === "@") continue;
+        const ends = endsOf(g);
+        const r = Object.values(D.routes).find((x) => x.from === g.sig && x.type === "shunt" && (x.ends.some((e) => ends.includes(e)) || ends.includes(x.to)));
+        if (r) r.sections.forEach((x) => res.add(x));
+      }
+      return res;
+    }
+    // sections that active shunting movements will still use by their plans (fixed signals only)
+    function reservedByShunting() {
+      const res = new Set();
+      S.trains.forEach((t) => {
+        if (t.done || !t.shunt) return;
+        const plan = t.shunt.plan;
+        for (let i = t.shunt.step; i < plan.length; i++) {
+          const g = plan[i]; if (!g.sig || g.sig[0] === "@") continue;
+          const ends = endsOf(g);
+          const r = Object.values(D.routes).find((x) => x.from === g.sig && x.type === "shunt" && (x.ends.some((e) => ends.includes(e)) || ends.includes(x.to)));
+          if (r) r.sections.forEach((x) => res.add(x));
+        }
+      });
+      return res;
+    }
     // the automatic dispatcher prepares a route one block in advance, as a DSP does
     function autoDispatch(tr) {
       const sig = upcomingSignal(tr); if (!sig) return;
@@ -539,6 +565,11 @@
         const rank = (r) => Math.min(...r.ends.map((e) => (ends.includes(e) ? ends.indexOf(e) : 99)));
         cands = Object.values(D.routes).filter((r) => r.from === sig && r.type === "shunt" && r.ends.some((e) => ends.includes(e))).sort((a, b) => rank(a) - rank(b) || a.sections.length - b.sections.length);
         if (goal.free) cands = cands.filter((r) => { const st = S.sec[r.sections[r.sections.length - 1]]; return !secBusy(st) || st.occ === tr.id; });
+        // the way back (later steps) must not be taken by a train: otherwise the movement may lock it out
+        const back = laterShuntSections(tr);
+        const held = [...back].find((x) => { const st = S.sec[x], R0 = st.lock && routeDef(st.lock); const o = st.occ != null && S.trains.find((t) => t.id === st.occ);
+          return (R0 && R0.type === "train") || (o && !o.shunt && o.id !== tr.id); });
+        if (held) { const reason = "шлях повернення (" + held + ") зайнятий поїзним маршрутом або поїздом"; if (tr.lastReason !== reason) { tr.lastReason = reason; log("delay", trainLabel(tr.id) + " чекає: " + reason); } return; }
         const sg = D.signals[sig];
         if (!sg.behind.includes(lastSec)) {
           const lead = pickLead(sg, lastSec, tr.id, false);
@@ -549,7 +580,16 @@
         }
       } else {
         cands = Object.values(D.routes).filter((r) => r.from === sig && r.type === "train");
-        if (tr.pref && kindOf(lastSec, tr) === "approach") cands = tr.pref.map((p) => cands.find((r) => r.to === p)).filter(Boolean);
+        if (tr.pref && kindOf(lastSec, tr) === "approach") {
+          cands = tr.pref.map((p) => cands.find((r) => r.to === p)).filter(Boolean);
+          // do not take a train onto the way an active shunting movement still has to come back by
+          const res = reservedByShunting();
+          if (res.size) {
+            const ok = cands.filter((r) => !r.sections.some((x) => res.has(x)));
+            if (!ok.length && cands.length) { const reason = "колії зайняті маневрами, які ще не завершено"; if (tr.lastReason !== reason) { tr.lastReason = reason; log("delay", trainLabel(tr.id) + " чекає біля " + sig + ": " + reason); } return; }
+            cands = ok;
+          }
+        }
         else if (tr.exitTo) cands = cands.filter((r) => r.to === tr.exitTo);
       }
       let firstErr = null;
