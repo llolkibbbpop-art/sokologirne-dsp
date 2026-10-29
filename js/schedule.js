@@ -241,9 +241,25 @@ window.MODEL_PARAMS = {
   trainBlocks: { passenger:[2,3], freight:[3,5], test:[2,3], shunting:[1,1], electric:[2,2], intercity:[2,3] },         // delayed route release when approach is occupied (model)
   artReleaseSec: 180,         // artificial release 3–4 min (handbook p.144)
   shuntWaitSec: 300,
-  shuntingEnabledByDefault: false,
+  shuntingEnabledByDefault: true,
   shuntingPlan: { start:"8П-1", plan:[ { sig:"М13", end:"14П" }, { wait:300 }, { sig:"М9", end:"М22" } ],
     note:"модельний сценарій: 8 → 14 (ЕЧ-4) → 8" },
+  // Shunting jobs used by the timetable generator. Each step: open a shunting route from sig to end,
+  // or wait (seconds). Places and reversal points follow the signals on the plan; the jobs are model scenarios.
+  shuntingJobs: {
+    "ЕЧ-14": { name:"Подача вагонів на колію 14 (тягова підстанція ЕЧ-4) і назад на 8", start:"8П-1",
+      plan:[ { sig:"М13", end:"14П" }, { wait:600 }, { sig:"М9", end:"М22" } ] },
+    "Т-15":  { name:"Подача на тупик 15 і повернення на колію 8", start:"8П-1",
+      plan:[ { sig:"М13", end:"15П" }, { wait:480 }, { sig:"М9", end:"М22" } ] },
+    "ПЧ-10": { name:"Подача на колію 10 (ПЧ-4) з колії 6 і назад", start:"6П-3",
+      plan:[ { sig:"Н6", end:"10П" }, { wait:720 }, { sig:"М20", end:"Ч6" } ] },
+    "8-10":  { name:"З колії 8 на колію 10 (ПЧ-4) і на 8", start:"8П-3",
+      plan:[ { sig:"М22", end:"10П" }, { wait:600 }, { sig:"М20", end:"М13" } ] },
+    "4-6":   { name:"Перестановка з колії 4 на колію 6 через праву горловину (витягування за М6)", start:"4П-3",
+      plan:[ { sig:"Н4", end:"Ч" }, { wait:60 }, { sig:"М6", end:"Ч6" } ] },
+    "3-I":   { name:"Перестановка з колії 3 на колію I через праву горловину (витягування за М2)", start:"3П-3",
+      plan:[ { sig:"Н3", end:"ЧД" }, { wait:60 }, { sig:"М2", end:"М11" } ] }
+  },
   // handbook pp.136–165: switch transfer, cancellation sets, invitation, speed over a diverging switch
   switchTransferSec: 4,
   cancelFreeSec: 6,

@@ -448,10 +448,15 @@
 
   function renderEvents(full) {
     const S = sim.S, tb = $("evTable").tBodies[0];
-    if (full || tb.rows.length !== S.events.length) {
+    // rebuild whenever the day's timetable object changes (new day, new variant, reset) or grows (test train)
+    if (full || tb.rows.length !== S.events.length || ui.evRef !== S.events) {
+      ui.evRef = S.events;
+      $("evDay").textContent = "· доба " + S.day + " · " + S.events.length + " подій";
       tb.innerHTML = S.events.map((ev, i) => {
         const a = advice(ev);
-        return `<tr class="ev" data-i="${i}"><td>${esc(ev.ev.time)}</td><td><b>${esc(ev.ev.train)}</b></td><td>${typeShort[ev.ev.type] || ""}</td><td>${esc(P.directionLabel[ev.ev.direction] || ev.ev.direction)}</td><td>${a ? esc(a.track.replace("колія ", "")) : "—"}</td><td class="stc"></td><td><input type="number" min="0" max="600" value="${ev.delayMin}" data-d="${i}" aria-label="Затримка поїзда ${esc(ev.ev.train)}, хв"></td></tr>`;
+        const job = ev.ev.job && P.shuntingJobs[ev.ev.job];
+        const dir = job ? job.name : P.directionLabel[ev.ev.direction] || ev.ev.direction;
+        return `<tr class="ev${ev.ev.type === "shunting" ? " sh" : ""}" data-i="${i}"><td>${esc(ev.ev.time)}</td><td><b>${esc(ev.ev.train)}</b></td><td>${typeShort[ev.ev.type] || ""}</td><td class="dircell" title="${esc(dir)}">${esc(dir)}</td><td>${a ? esc(a.track.replace("колія ", "")) : job ? esc(job.start.replace(/П.*/, "")) : "—"}</td><td class="stc"></td><td><input type="number" min="0" max="600" value="${ev.delayMin}" data-d="${i}" aria-label="Затримка поїзда ${esc(ev.ev.train)}, хв"></td></tr>`;
       }).join("");
     }
     S.events.forEach((ev, i) => {
@@ -466,6 +471,11 @@
   $("evTable").addEventListener("click", (e) => { if (e.target.tagName === "INPUT") return; const r = e.target.closest("tr.ev"); if (!r) return; ui.selEvent = +r.dataset.i; const ev = sim.S.events[ui.selEvent]; ui.selTrain = ev.trainId; renderTrain(); renderEvents(); });
 
   function adviceHtml(ev) {
+    const job = ev.ev.job && P.shuntingJobs[ev.ev.job];
+    if (job) {
+      const steps = job.plan.map((st) => st.wait ? "чекати " + Math.round(st.wait / 60) + " хв" : "<b>" + esc(st.sig) + "</b> → «Встановити маневровий маршрут» → кінець <b>" + esc(st.end) + "</b>").join("; потім ");
+      return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name)}. Локомотив з'явиться на ділянці <b>${esc(job.start)}</b>. Порядок: ${steps}.</div>`;
+    }
     const a = advice(ev); if (!a) return "";
     const note = ev.ev.note ? `<div class="adv-note">${esc(ev.ev.note)}</div>` : "";
     return `<div class="advice"><b>Порада ДСП:</b> прийом на <b>${esc(a.track)}</b>: світлофор <b>${esc(a.entry)}</b> → «Встановити поїзний маршрут» → кінець <b>${esc(a.inEnd || "")}</b> (або сама колія). ${ev.ev.stopMin ? "Стоянка " + ev.ev.stopMin + " хв, потім" : "Далі"} відправлення: <b>${esc(a.exitSig || "")}</b> → «Встановити поїзний маршрут» → кінець <b>${esc(a.outEnd || "")}</b>.${note}</div>`;
@@ -530,7 +540,106 @@
     $("dateLine").textContent = "Доба " + S.day + " · умовна дата 28.10.2014" + (S.paused ? " · зупинено" : "");
   }
 
-  function refresh(full) { renderClock(); renderScheme(); renderIndicators(); renderEvents(full); renderNext(); renderTrain(); renderRku(); renderLog(full); }
+  // ---------- графік руху: time–distance chart, plan dashed, executed solid ----------
+  const G = { span: window.innerWidth < 600 ? 2 : 4, follow: true, start: 0, last: 0 };
+  [...$("gSpan").children].forEach((x) => x.classList.toggle("on", +x.dataset.h === G.span));
+  const GCOL = { passenger: "#ff5a4e", intercity: "#ff8a3d", electric: "#2fe05a", freight: "#e8eef0", test: "#6aa7ff", shunting: "#ffd23f" };
+  function drawGraph(force) {
+    const S = sim.S, cv = $("graph");
+    const nowKey = Math.floor(S.time / 5) + ":" + S.day + ":" + G.span + ":" + G.start + ":" + G.follow;
+    if (!force && G.last === nowKey && cv.width === Math.round(cv.clientWidth * (window.devicePixelRatio || 1))) return;
+    G.last = nowKey;
+    const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    if (!W) return;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const css = getComputedStyle(document.documentElement);
+    const col = (v) => css.getPropertyValue(v).trim();
+    c.fillStyle = col("--panel"); c.fillRect(0, 0, W, H);
+    const L = W < 500 ? 66 : 96, R = 10, top = 26, bot = H - 24;
+    const yTop = top, yBot = bot, yA = top + (bot - top) * 0.38, yB = top + (bot - top) * 0.62;
+    const span = G.span * 3600;
+    if (G.follow) G.start = Math.max(0, Math.min(86400 - span, S.time - span * 0.3));
+    const t0 = G.start, t1 = t0 + span;
+    const X = (t) => L + ((t - t0) / span) * (W - L - R);
+    // rows
+    c.fillStyle = "rgba(127,127,127,.12)"; c.fillRect(L, yA, W - L - R, yB - yA);
+    c.strokeStyle = col("--line"); c.lineWidth = 1;
+    [yTop, yA, yB, yBot].forEach((y) => { c.beginPath(); c.moveTo(L, y); c.lineTo(W - R, y); c.stroke(); });
+    c.fillStyle = col("--fg"); c.font = "600 " + (W < 500 ? 10 : 11) + "px " + col("--font-mono"); c.textBaseline = "middle";
+    const names = W < 500 ? ["Якимівка", "Сокол.", "Партизани"] : ["Якимівка", "Сокологірне", "Партизани"];
+    c.fillText(names[0], 4, yTop); c.fillText(names[1], 4, (yA + yB) / 2); c.fillText(names[2], 4, yBot);
+    // time grid
+    const step = [900, 1800, 3600, 7200, 10800].find((st) => (st / span) * (W - L - R) >= 56) || 10800;
+    c.textBaseline = "alphabetic"; c.font = "10px " + col("--font-mono"); c.fillStyle = col("--muted");
+    for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) {
+      const x = X(t); c.strokeStyle = "rgba(127,127,127,.18)"; c.beginPath(); c.moveTo(x, top - 6); c.lineTo(x, bot); c.stroke();
+      c.fillText(E.fmt(t).slice(0, 5), x - 14, H - 6);
+    }
+    const lead = (ev) => ((P.appearLeadMin[ev.ev.type] || 3) * 60);
+    // everything inside the plot is clipped to the time window; train numbers never overlap
+    c.save(); c.beginPath(); c.rect(L, 0, W - L - R, H); c.clip();
+    const used = { top: [], bot: [], mid: [] };
+    const label = (row, x, y, text, color) => {
+      c.font = "600 10px " + col("--font-mono");
+      const w = c.measureText(text).width;
+      if (used[row].some(([a, b]) => x < b + 4 && a < x + w + 4)) return;
+      used[row].push([x, x + w]); c.fillStyle = color; c.fillText(text, x, y);
+    };
+    S.events.forEach((ev) => {
+      if (ev.status === "config") return;
+      const color = GCOL[ev.ev.type] || "#ccc";
+      const T = ev.time + (ev.delayMin || 0) * 60, stop = (ev.ev.stopMin || 0) * 60;
+      const odd = ev.parity === "odd";
+      const yIn = odd ? yTop : yBot, yEdgeIn = odd ? yA : yB, yEdgeOut = odd ? yB : yA, yOut = odd ? yBot : yTop;
+      let planPts, sh = ev.ev.type === "shunting";
+      if (sh) {
+        const job = P.shuntingJobs[ev.ev.job] || P.shuntingPlan;
+        const dur = job.plan.reduce((a, st) => a + (st.wait || 180), 0);
+        if (T + dur < t0 || T > t1) return;
+        c.fillStyle = "rgba(255,210,63,.18)"; c.fillRect(X(T), yA + 3, Math.max(2, X(T + dur) - X(T)), yB - yA - 6);
+        const m = ev.marks;
+        if (m && m.appear != null) { c.fillStyle = color; c.fillRect(X(m.appear), (yA + yB) / 2 - 3, Math.max(2, X(m.gone != null ? m.gone : S.time) - X(m.appear)), 6); }
+        label("mid", Math.max(L + 2, X(T) + 2), yA + 12, ev.ev.train, color);
+        return;
+      }
+      planPts = [[T - lead(ev), yIn], [T - 30, yEdgeIn], [T + stop, yEdgeOut], [T + stop + 240, yOut]];
+      if (planPts[3][0] < t0 || planPts[0][0] > t1) return;
+      c.strokeStyle = color; c.globalAlpha = 0.55; c.setLineDash([5, 4]); c.lineWidth = 1.2;
+      c.beginPath(); planPts.forEach(([t, y], k) => (k ? c.lineTo(X(t), y) : c.moveTo(X(t), y))); c.stroke();
+      c.setLineDash([]); c.globalAlpha = 1;
+      // executed line from the train's marks, extended to "now" while it is still running
+      const m = ev.marks;
+      if (m && m.appear != null) {
+        const tr = S.trains.find((x) => x.id === ev.trainId);
+        const pts = [[m.appear, yIn]];
+        if (m.arrive != null) pts.push([m.arrive, yEdgeIn]);
+        if (m.depart != null) pts.push([m.depart, yEdgeOut]);
+        if (m.gone != null) pts.push([m.gone, yOut]);
+        else if (tr && !tr.done) {
+          const k = D.sections[tr.seq[tr.idx]].kind;
+          const y = m.depart != null ? yEdgeOut + (yOut - yEdgeOut) * 0.5 : m.arrive != null ? (k === "track" ? (yEdgeIn + yEdgeOut) / 2 : yEdgeIn + (yEdgeOut - yEdgeIn) * 0.25) : yIn + (yEdgeIn - yIn) * (tr.wait ? 0.95 : 0.5);
+          pts.push([S.time, y]);
+        }
+        c.strokeStyle = color; c.lineWidth = 2;
+        c.beginPath(); pts.forEach(([t, y], k) => (k ? c.lineTo(X(t), y) : c.moveTo(X(t), y))); c.stroke();
+      }
+      const lx = Math.max(L + 2, X(planPts[0][0]) + 2);
+      const late = sim.lateMin(ev);
+      label(odd ? "top" : "bot", lx, odd ? yTop - 5 : yBot + 13, ev.ev.train + (late > 0 ? " +" + late : ""), late > 0 ? "#ff5a4e" : color);
+    });
+    // now
+    if (S.time >= t0 && S.time <= t1) { c.strokeStyle = "#ff2b2b"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(S.time), top - 10); c.lineTo(X(S.time), bot); c.stroke(); }
+    c.restore();
+    $("graphDay").textContent = "· доба " + S.day + " · " + E.fmt(t0).slice(0, 5) + "–" + E.fmt(Math.min(t1, 86399)).slice(0, 5);
+  }
+  $("gSpan").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; G.span = +b.dataset.h; [...$("gSpan").children].forEach((x) => x.classList.toggle("on", x === b)); if (G.span === 24) { G.follow = false; G.start = 0; $("gNow").classList.remove("on"); } drawGraph(true); });
+  $("gBack").onclick = () => { G.follow = false; $("gNow").classList.remove("on"); G.start = Math.max(0, G.start - G.span * 1800); drawGraph(true); };
+  $("gFwd").onclick = () => { G.follow = false; $("gNow").classList.remove("on"); G.start = Math.min(86400 - G.span * 3600, G.start + G.span * 1800); drawGraph(true); };
+  $("gNow").onclick = () => { G.follow = true; $("gNow").classList.add("on"); if (G.span === 24) { G.span = 4; [...$("gSpan").children].forEach((x) => x.classList.toggle("on", x.dataset.h === "4")); } drawGraph(true); };
+  window.addEventListener("resize", () => drawGraph(true));
+
+  function refresh(full) { renderClock(); renderScheme(); renderIndicators(); renderEvents(full); renderNext(); renderTrain(); renderRku(); renderLog(full); drawGraph(full); }
 
   // ---------- controls ----------
   function setRunning(r) { ui.running = r; $("btnPlay").textContent = r ? "⏸ Пауза" : "▶ Пуск"; $("btnPlay").classList.toggle("on", r); }

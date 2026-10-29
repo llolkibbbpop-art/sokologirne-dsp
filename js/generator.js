@@ -97,9 +97,14 @@
       if (t.note) e.note = t.note;
       return e;
     });
-    // two shunting slots, as in the task schedule (run only when shunting is enabled)
-    events.push({ time: hm(321 + ri(-30, 30)), train: "MN-01", type: "shunting", direction: "station", action: "shunting_sequence", timeStatus: "generated" });
-    events.push({ time: hm(694 + ri(-30, 30)), train: "MN-02", type: "shunting", direction: "station", action: "shunting_sequence", timeStatus: "generated" });
+    // shunting jobs (pp. model): 4 / 8 / 12 per day, spread over 05:00–23:00
+    const JOBS = ["ЕЧ-14", "Т-15", "ПЧ-10", "8-10", "4-6", "3-I"];
+    const nSh = Math.round(8 * k);
+    for (let i = 0; i < nSh; i++) {
+      const job = JOBS[ri(0, JOBS.length - 1)];
+      events.push({ time: hm(300 + (i + 0.5) * (1080 / nSh) + ri(-25, 25)), train: "МН-" + String(i + 1).padStart(2, "0"), type: "shunting",
+        direction: "station", action: "shunting_sequence", job, timeStatus: "generated" });
+    }
     events.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
     return { scheduleId: "generated_" + seed + "_" + intensity + "_d" + day, station: "Сокологірне", generated: true, events };
   }

@@ -93,7 +93,7 @@
         const here = (sigAt[cur] || []).filter((s) => s.id !== sg.id);
         if (here.length) {
           here.forEach((s) => add(s.id, path, through));
-          if (stops >= 2) return;
+          if (stops >= 3) return;
           stops++;
           thr = through.concat(here.filter((s) => s.dir === sg.dir && s.kind !== "entry").map((s) => s.id));
         }
@@ -379,7 +379,8 @@
         id: S.nextTrainId++, num: o.num, type: o.type, parity: o.parity, eventIdx: o.eventIdx,
         pref: o.pref, stopSec: o.stopSec || 0, seq: chain.slice(), lim: chain.map(() => 0), idx: 0, tIn: 0,
         occ: [chain[0]], len: o.len || blocksFor(o.type, o.num), nextSignal: null, wait: null, waitSec: 0, done: false,
-        status: o.type === "shunting" ? "стоїть" : "на підході", shunt: o.shunt || null, loco: !!o.loco, appearedAt: S.time
+        status: o.type === "shunting" ? "стоїть" : "на підході", shunt: o.shunt || null, loco: !!o.loco, appearedAt: S.time,
+        marks: { appear: S.time }
       };
       S.sec[chain[0]].occ = tr.id;
       S.trains.push(tr);
@@ -480,7 +481,8 @@
       closeSignalsOf(rid);
       if (S.sig[sig].inv) S.sig[sig].inv = null;
       if (tr.shunt) tr.shunt.step++;
-      if (D.signals[sig].kind === "exit" && tr.type !== "shunting") tr.passedAt = S.time;
+      if (D.signals[sig].kind === "exit" && tr.type !== "shunting") { tr.passedAt = S.time; tr.marks.depart = S.time; }
+      if (D.signals[sig].kind === "entry" && tr.type !== "shunting") tr.marks.arrive = S.time;
       tr.wait = null; tr.status = "рух";
       log("train", trainLabel(tr.id) + " проходить " + sig + (R.invite ? " за запрошувальним сигналом (≤20 км/год)" : " · " + rid));
     }
@@ -507,7 +509,7 @@
       if (atEnd) {
         if (info.kind === "exit" || (tr.shunt && tr.shunt.step >= tr.shunt.plan.length)) {
           tr.occ.forEach(releaseSection); tr.occ = [];
-          tr.done = true; tr.doneAt = S.time; tr.status = tr.shunt ? "маневри завершено" : "проследував";
+          tr.done = true; tr.doneAt = S.time; tr.marks.gone = S.time; tr.status = tr.shunt ? "маневри завершено" : "проследував";
           finishEvent(tr);
           log("train", tr.shunt ? "Маневровий склад " + tr.num + " завершив маневри на " + h : "Поїзд " + tr.num + " віддалився з " + h);
           return;
@@ -578,20 +580,22 @@
       if (tr.eventIdx == null) return;
       const ev = S.events[tr.eventIdx]; if (!ev) return;
       ev.status = "passed"; ev.passedAt = S.time;
-      ev.lateMin = Math.round(((tr.passedAt || S.time) - ev.time - (ev.ev.stopMin || 0) * 60) / 60);
+      ev.lateMin = tr.type === "shunting" ? 0 : Math.round(((tr.passedAt || S.time) - ev.time - (ev.ev.stopMin || 0) * 60) / 60);
     }
 
     function spawnScheduled() {
       for (const ev of S.events) {
+        if (ev.test) continue;
         if (ev.status !== "planned" && ev.status !== "waiting") continue;
         const lead = typeof P.appearLeadMin === "object" ? (P.appearLeadMin[ev.ev.type] ?? 3) : P.appearLeadMin;
         const appear = ev.time + ev.delayMin * 60 - lead * 60;
         if (S.time < appear) continue;
         if (ev.ev.action === "shunting_sequence") {
-          const st = S.sec[P.shuntingPlan.start];
-          if (st.occ != null || st.lock) { if (ev.status !== "waiting") { ev.status = "waiting"; log("delay", "Маневри " + ev.ev.train + " відкладено: " + P.shuntingPlan.start + " зайнята"); } continue; }
-          const tr = spawnTrain({ num: ev.ev.train, type: "shunting", parity: null, start: P.shuntingPlan.start, eventIdx: ev.idx, len: 1, shunt: { plan: P.shuntingPlan.plan, step: 0 } });
-          ev.status = "active"; ev.trainId = tr.id; continue;
+          const job = (P.shuntingJobs && P.shuntingJobs[ev.ev.job]) || P.shuntingPlan;
+          const st = S.sec[job.start];
+          if (secBusy(st) || st.lock) { if (ev.status !== "waiting") { ev.status = "waiting"; log("delay", "Маневри " + ev.ev.train + " відкладено: ділянка " + job.start + " зайнята"); } continue; }
+          const tr = spawnTrain({ num: ev.ev.train, type: "shunting", parity: null, start: job.start, eventIdx: ev.idx, len: 1, shunt: { plan: job.plan, step: 0, job: ev.ev.job } });
+          ev.status = "active"; ev.trainId = tr.id; ev.marks = tr.marks; continue;
         }
         const start = D.signals[T.entrySignal[ev.parity]].approachChain;
         if (secBusy(S.sec[start[0]])) {
@@ -600,14 +604,16 @@
         }
         const pref = [ev.recTrack, ...P.trackPreference[ev.parity]].filter((v, k, a) => v && a.indexOf(v) === k);
         const tr = spawnTrain({ num: ev.ev.train, type: ev.ev.type, parity: ev.parity, start, eventIdx: ev.idx, pref, stopSec: (ev.ev.stopMin || 0) * 60 });
-        ev.status = "active"; ev.trainId = tr.id;
+        ev.status = "active"; ev.trainId = tr.id; ev.marks = tr.marks;
       }
       for (const pt of S.pendingTests) {
         if (pt.spawned || S.time < pt.at) continue;
         const start = D.signals[T.entrySignal[pt.parity]].approachChain;
         if (secBusy(S.sec[start[0]])) continue;
         pt.spawned = true;
-        spawnTrain({ num: pt.num, type: "test", parity: pt.parity, start, pref: pt.pref, stopSec: pt.stopSec });
+        const ev = S.events.find((e) => e.test === pt);
+        const tr = spawnTrain({ num: pt.num, type: "test", parity: pt.parity, start, pref: pt.pref, stopSec: pt.stopSec, eventIdx: ev ? ev.idx : undefined });
+        if (ev) { ev.status = "active"; ev.trainId = tr.id; ev.marks = tr.marks; }
       }
     }
 
@@ -662,6 +668,11 @@
     function addTestTrain(o) {
       const pt = { num: o.num || "Т-" + (S.pendingTests.length + 1), parity: o.parity, pref: o.track ? [o.track] : P.trackPreference[o.parity], stopSec: (o.stopMin || 0) * 60, at: S.time + (o.inMin || 0) * 60, spawned: false };
       S.pendingTests.push(pt);
+      // a test train is entered into the day's timetable like any other train
+      const idx = S.events.length;
+      S.events.push({ idx, test: pt, ev: { time: fmt(pt.at + 240).slice(0, 5), train: pt.num, type: "test", direction: o.parity === "odd" ? "Dzhankoi" : "Melitopol",
+        action: "pass_station", timeStatus: "manual", stopMin: o.stopMin || 0 }, parity: o.parity, needsConfig: null, recTrack: pt.pref[0],
+        time: pt.at + 240, delayMin: 0, status: "planned", trainId: null, passedAt: null });
       log("cmd", "Створено тестовий поїзд " + pt.num + " (" + (o.parity === "odd" ? "непарний" : "парний") + ", колія " + (o.track || "авто") + ") на " + fmt(pt.at));
       return pt;
     }
