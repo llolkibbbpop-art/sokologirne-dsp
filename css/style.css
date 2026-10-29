@@ -543,3 +543,5 @@ body.grey-console .late, body.grey-console .adv-note { color: #ffe0dc; font-weig
 .st-list button.on { border-color: var(--fg); }
 
 .sw-lockf { fill: none; stroke: #ffffff; stroke-width: 1.6; stroke-dasharray: 3 2; }
+.tube-o, .tube-i { stroke-linejoin: miter; stroke-miterlimit: 4; }
+.bufstop { fill: #ffffff; stroke: none; }

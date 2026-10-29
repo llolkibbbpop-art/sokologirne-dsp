@@ -87,10 +87,37 @@
     gXO = el("g", {}, svg); gXI = el("g", {}, svg);
     const gSO = el("g", {}, svg), gSI = el("g", {}, svg), gO = el("g", {}, svg), gI = el("g", {}, svg), gHit = el("g", {}, svg);
     edgeEls.length = 0;
-    T.edges.forEach(([a, b, sec]) => {
-      const leg = swLegEdge[a + "|" + b];
-      const sloped = edgePts(a, b).some((p, k, A) => k && p[1] !== A[k - 1][1]);
-      const d = shrunk(a, b, isJoint(a) ? 3 : 0, isJoint(b) ? 3 : 0);
+    // join pieces of one section that meet at a plain bend into one polyline (no notches at the corners)
+    const swNode = new Set(T.switches.map((x) => x.node)), byNode = {};
+    T.edges.forEach((e, k) => [e[0], e[1]].forEach((n) => (byNode[n] = byNode[n] || []).push(k)));
+    const legKey = (a, b) => JSON.stringify(swLegEdge[a + "|" + b] || null);
+    const seen = new Set();
+    T.edges.forEach((e0, k0) => {
+      if (seen.has(k0)) return;
+      seen.add(k0);
+      const sec = e0[2], lk = legKey(e0[0], e0[1]);
+      let nodes = [e0[0], e0[1]];
+      const grow = (atEnd) => {
+        for (let g = 0; g < 50; g++) {
+          const n = atEnd ? nodes[nodes.length - 1] : nodes[0], prev = atEnd ? nodes[nodes.length - 2] : nodes[1];
+          if (swNode.has(n) || (byNode[n] || []).length !== 2) return;
+          const k = byNode[n].find((x) => !seen.has(x) && !((T.edges[x][0] === n && T.edges[x][1] === prev) || (T.edges[x][1] === n && T.edges[x][0] === prev)));
+          if (k == null) return;
+          const e = T.edges[k], nx = e[0] === n ? e[1] : e[0];
+          if (e[2] !== sec || legKey(n, nx) !== lk) return;
+          seen.add(k);
+          if (atEnd) nodes.push(nx); else nodes.unshift(nx);
+        }
+      };
+      grow(true); grow(false);
+      const pts = [];
+      for (let q = 0; q < nodes.length - 1; q++) { const P = edgePts(nodes[q], nodes[q + 1]); (q ? P.slice(1) : P).forEach((x) => pts.push(x.slice())); }
+      const cut = (p0, p1, c) => { const L = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1; p0[0] += (p1[0] - p0[0]) / L * c; p0[1] += (p1[1] - p0[1]) / L * c; };
+      if (isJoint(nodes[0])) cut(pts[0], pts[1], 3);
+      if (isJoint(nodes[nodes.length - 1])) cut(pts[pts.length - 1], pts[pts.length - 2], 3);
+      const d = "M" + pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" L");
+      const leg = swLegEdge[nodes[0] + "|" + nodes[1]];
+      const sloped = pts.some((p, k, A) => k && p[1] !== A[k - 1][1]);
       const o = el("path", { d, class: "tube-o" }, sloped ? gSO : gO);
       const i = el("path", { d, class: "tube-i" }, sloped ? gSI : gI);
       const hit = el("path", { d, class: "hit" }, gHit);
@@ -98,6 +125,15 @@
       hit.addEventListener("click", (ev) => onObjectClick({ kind: "sec", id: sec }, ev));
       edgeEls.push({ o, i, sec, leg, home: [sloped ? gSO : gO, sloped ? gSI : gI], off: false });
     });
+    // dead ends: a white buffer stop across the end of a station track
+    const deg = {}; T.edges.forEach(([a, b]) => { deg[a] = (deg[a] || 0) + 1; deg[b] = (deg[b] || 0) + 1; });
+    T.edges.forEach(([a, b, sec]) => [[a, b], [b, a]].forEach(([n, m]) => {
+      const k = (D.sections[sec] || {}).kind;
+      if (deg[n] !== 1 || ["line", "approach", "exit"].includes(k)) return;
+      const P = edgePts(n, m), [x0, y0] = P[0], [x1, y1] = P[1], L = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L;
+      const ang = (Math.atan2(uy, ux) * 180) / Math.PI;
+      el("rect", { x: -3, y: -9, width: 6, height: 18, class: "bufstop", transform: `translate(${(x0 - ux * 2).toFixed(1)},${(y0 - uy * 2).toFixed(1)}) rotate(${ang.toFixed(1)})` }, svg);
+    }));
     T.labels.forEach(([t, x, y]) => (el("text", { x, y: sy(y + 6) - 12, class: "trk-label" }, svg).textContent = t));
     (V.blockLabels || []).forEach(([t, x, y, dy]) => (el("text", { x, y: sy(y) + dy, class: "blk-label" }, svg).textContent = t));
     // switches: number on the side shown on the plan; lock sign and red block square per table 2.16

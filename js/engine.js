@@ -168,7 +168,14 @@
     }
     const routeDef = (rid) => D.routes[rid] || (S.pseudo && S.pseudo[rid]);
     // a single-track line is the approach for arriving trains and the departure line for the others
-    const kindOf = (sec, tr) => { const si = D.sections[sec], k = si.kind; return k === "line" ? (tr && tr.parity === (si.arrParity || T.lineArrivalParity) ? "approach" : "exit") : k; };
+    const kindOf = (sec, tr) => {
+      const si = D.sections[sec], k = si.kind;
+      if (k !== "line") return k;
+      // a train with an explicit entry signal approaches over that signal's chain only (lines where trains change direction)
+      const ch = tr && tr.entry && D.signals[tr.entry] && D.signals[tr.entry].approachChain;
+      if (ch) return ch.includes(sec) ? "approach" : "exit";
+      return tr && tr.parity === (si.arrParity || T.lineArrivalParity) ? "approach" : "exit";
+    };
     const entryOf = (tr) => tr.entry || T.entrySignal[tr.parity];
     const stepGoal = (tr) => (tr.shunt ? tr.shunt.plan[tr.shunt.step] || {} : {});
     const endsOf = (goal) => [].concat(goal.end == null ? [] : goal.end);
