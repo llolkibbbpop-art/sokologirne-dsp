@@ -9,6 +9,7 @@
   const NS = "http://www.w3.org/2000/svg";
   // timetable source: seeded generator (default) or the fixed JSON from the task
   const src = { kind: "gen", seed: 2014, level: "medium" };
+  const V = T.view || {};
   const scheduleSource = () => (src.kind === "gen" ? (day) => window.ScheduleGenerator.generate(src.seed, src.level, day) : window.SCHEDULE);
   let sim = E.createSim(T, scheduleSource(), P, { auto: false });
   const D = sim.D;
@@ -20,16 +21,17 @@
   const LAMP = { red: "#ff2b2b", green: "#2fe05a", white: "#ffffff", blue: "#2f6bff" };
 
   // ui.vs stretches the plan vertically ("Лише пульт"): track spacing grows, symbols keep their size
-  const VY0 = 48, VH = 316;
+  const BOX = V.box || [-165, 48, 2895, 316], VY0 = BOX[1], VH = BOX[3];
   const sy = (y) => VY0 + (y - VY0) * (ui.vs || 1);
   const pt = (n) => { const p = (T.displayNodes && T.displayNodes[n]) || T.nodes[n]; return [p[0], sy(p[1])]; };
   const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const trackName = (g) => (g ? "колія " + g.replace("П", "") : "");
-  const endName = (e) => (D.signals[e] ? "світлофор " + e : e === "ВЯ" ? "кнопка відпр. на Якимівку" : D.sections[e] ? (D.sections[e].group ? trackName(D.sections[e].group) : e) : trackName(e));
+  const endBtn = (e) => (T.endButtons || []).find((b) => b.id === e);
+  const endName = (e) => (D.signals[e] ? "світлофор " + e : endBtn(e) ? "кнопка " + endBtn(e).label : D.sections[e] ? (D.sections[e].group ? trackName(D.sections[e].group) : e) : trackName(e));
   // geometry of a signal symbol (shared by drawing, pick highlighting and the route line)
   function sigGeom(s) {
-    const [x, y] = pt(s.node), dir = s.dir === "R" ? 1 : -1, yy = y + s.side * 15;
+    const [x0, y] = pt(s.node), x = x0 + (s.dx || 0), dir = s.dir === "R" ? 1 : -1, yy = y + s.side * 15;
     return { x, y, yy, dir, lx: x + dir * 12 };
   }
 
@@ -61,12 +63,11 @@
     const nodeSecs = {};
     T.edges.forEach(([a, b, sec]) => [a, b].forEach((n) => (nodeSecs[n] = nodeSecs[n] || new Set()).add(sec)));
     const isJoint = (n) => nodeSecs[n].size > 1 && !/^S/.test(n);
-    svg.setAttribute("viewBox", "-165 " + VY0 + " 2895 " + Math.round(VH * (ui.vs || 1)));
-    [[1089, 100, 238, 37], [1065, 270, 497, 11], [1065, 339, 497, 11]].forEach(([x, y, w, h]) => el("rect", { x, y: sy(y + h / 2) - h / 2, width: w, height: h, class: "platform" }, svg));
+    svg.setAttribute("viewBox", BOX[0] + " " + VY0 + " " + BOX[2] + " " + Math.round(VH * (ui.vs || 1)));
+    (V.platforms || []).forEach(([x, y, w, h]) => el("rect", { x, y: sy(y + h / 2) - h / 2, width: w, height: h, class: "platform" }, svg));
     const note = (x, y, t, cls) => (el("text", { x, y: sy(y), class: cls || "note" }, svg).textContent = t);
-    note(-150, 226, "← ЯКИМІВКА · парний"); note(2440, 352, "ПАРТИЗАНИ · непарний →");
-    note(250, 66, "Тяг. підст. ЕЧ-4"); note(2125, 177, "ПЧ-4"); note(2385, 205, "1272 км+302 м");
-    el("line", { x1: 2375, y1: sy(210), x2: 2375, y2: sy(355), class: "border" }, svg);
+    (V.notes || []).forEach(([x, y, t]) => note(x, y, t));
+    (V.borders || []).forEach(([x1, y1, x2, y2]) => el("line", { x1, y1: sy(y1), x2, y2: sy(y2), class: "border" }, svg));
     // Draw order: inactive switch legs (dim) at the bottom, sloped branches, then straight tracks on top.
     gXO = el("g", {}, svg); gXI = el("g", {}, svg);
     const gSO = el("g", {}, svg), gSI = el("g", {}, svg), gO = el("g", {}, svg), gI = el("g", {}, svg), gHit = el("g", {}, svg);
@@ -83,8 +84,7 @@
       edgeEls.push({ o, i, sec, leg, home: [sloped ? gSO : gO, sloped ? gSI : gI], off: false });
     });
     T.labels.forEach(([t, x, y]) => (el("text", { x, y: sy(y + 6) - 12, class: "trk-label" }, svg).textContent = t));
-    [["2НП", -95, 314], ["1НП", 15, 314], ["1ЧП", 2520, 244], ["2ЧП", 2650, 244], ["1НУП", 2490, 314], ["2НУП", 2640, 314], ["1ЧУП", 110, 244], ["2ЧУП", -65, 244]]
-      .forEach(([t, x, y]) => (el("text", { x, y: y > 280 ? sy(294) + 20 : sy(257) - 13, class: "blk-label" }, svg).textContent = t));
+    (V.blockLabels || []).forEach(([t, x, y, dy]) => (el("text", { x, y: sy(y) + dy, class: "blk-label" }, svg).textContent = t));
     // switches: number on the side shown on the plan; lock sign and red block square per table 2.16
     T.switches.forEach((s) => {
       const [x, y] = pt(s.node);
@@ -100,7 +100,9 @@
       // blocked: red underlay under the number (handbook p.190); position locked: padlock beside it
       const bl = el("rect", { x: tx - 9, y: ty - 11, width: 18, height: 14, rx: 2, class: "sw-block" }, g);
       const t = el("text", { x: tx, y: ty, "text-anchor": "middle", class: "sw-label" }, g); t.textContent = s.id;
-      const lk = el("text", { x: tx + away * (s.id.length > 1 ? 15 : 13), y: ty, "text-anchor": away > 0 ? "start" : "end", class: "sw-lock" }, g); lk.textContent = "🔒";
+      const lk = s.lockOut ? el("text", { x: tx, y: ty + (below ? 17 : -17), "text-anchor": "middle", class: "sw-lock" }, g)
+        : el("text", { x: tx + away * (s.id.length > 1 ? 15 : 13), y: ty, "text-anchor": away > 0 ? "start" : "end", class: "sw-lock" }, g);
+      lk.textContent = "🔒";
       el("title", {}, g).textContent = "Стрілка " + s.id;
       g.addEventListener("click", (ev) => onObjectClick({ kind: "sw", id: s.id }, ev));
       swEls[s.id] = { t, lk, bl, g };
@@ -201,9 +203,11 @@
       if (!st.wagons || st.occ != null) return;
       const [x, y] = secMid(id);
       const g = el("g", { class: "train wagons", transform: `translate(${x},${y})` }, trainLayer);
-      el("rect", { x: -18, y: -9, width: 36, height: 17 }, g);
-      el("text", { x: 0, y: 4, "text-anchor": "middle" }, g).textContent = "ваг.";
-      el("title", {}, g).textContent = "Вагони стоять на " + id + " з " + E.fmt(st.wagons.since).slice(0, 5) + " (залишив " + st.wagons.num + ")";
+      const w = st.wagons, lab = w.consist ? (w.ready ? "◄" : "") + w.consist : "ваг.";
+      const bw = Math.max(36, 12 + lab.length * 7.4);
+      el("rect", { x: -bw / 2, y: -9, width: bw, height: 17 }, g);
+      el("text", { x: 0, y: 4, "text-anchor": "middle" }, g).textContent = lab;
+      el("title", {}, g).textContent = (w.consist ? "Состав " + w.consist + (w.ready ? " — готовий до відправлення (локомотив у голові)" : " — без локомотива з боку відправлення") : "Вагони (залишив " + w.num + ")") + " на " + id + " з " + E.fmt(w.since).slice(0, 5);
     });
     S.trains.filter((t) => !t.done).forEach((tr) => {
       const [x, y] = secMid(tr.seq[tr.idx]);
@@ -242,10 +246,12 @@
     if (msg) toast(msg);
     renderScheme(); renderRku(); renderIndicators();
   }
+  // the first variant of a route to this end that can be set now (else the main variant)
   function routeForEnd(end) {
     const t = pickTargets();
-    return t.routes.find((r) => r.ends.includes(end)) ||
-      (D.sections[end] && t.routes.find((r) => r.ends.includes(D.sections[end].group) || r.ends.includes(end)));
+    let c = t.routes.filter((r) => r.ends.includes(end));
+    if (!c.length && D.sections[end]) c = t.routes.filter((r) => r.ends.includes(D.sections[end].group));
+    return c.find((r) => !sim.checkRoute(r.id)) || c[0];
   }
   function finishPick(endId) {
     const r = routeForEnd(endId);
@@ -371,7 +377,8 @@
       h += `<dl class="kv"><dt>Ділянка</dt><dd><b>${esc(s.id)}</b> · ${esc(info.label || "стрілочна секція")}</dd><dt>Зайнятість</dt><dd>${occ ? "зайнята: " + esc(occ.num) : st.falseOcc ? "<b class='late'>показує зайнятість без поїзда</b>" : "вільна"}</dd><dt>Замикання</dt><dd>${st.lock ? "маршрут " + esc(st.lock) : "ні"}${st.artUntil != null ? " · ШР до " + E.fmt(st.artUntil) : ""}</dd></dl><div class="menu">`;
       h += B("secblock", s.id, st.blocked ? "Розблокувати ділянку" : "Заблокувати ділянку");
       h += B("art", s.id, "Штучне розмикання", { danger: true, dis: !st.lock });
-      if (!occ && !st.lock && info.kind !== "approach" && info.kind !== "exit") h += B("loco", s.id, "Поставити маневровий локомотив");
+      if (st.wagons) h = h.replace("</dl>", `<dt>Вагони</dt><dd>${st.wagons.consist ? "состав " + esc(st.wagons.consist) + (st.wagons.ready ? " — готовий до відправлення" : "") : "залишив " + esc(st.wagons.num)} з ${E.fmt(st.wagons.since).slice(0, 5)}</dd></dl>`);
+      if (!occ && !st.lock && !["approach", "exit", "line"].includes(info.kind)) h += B("loco", s.id, "Поставити маневровий локомотив");
       if (occ && occ.loco) h += B("locodel", String(occ.id), "Прибрати локомотив");
       h += `</div><details class="train-faults"><summary>Навчання: несправності</summary><div class="menu">${B("secfault", s.id, st.falseOcc ? "Усунути хибну зайнятість" : "Ввести хибну зайнятість")}</div></details>`;
     } else if (s.kind === "marker") {
@@ -379,7 +386,8 @@
       h += `<dl class="kv"><dt>Об'єкт</dt><dd><b>${esc(m.id)}</b></dd></dl><p class="hint">${esc(m.note)}</p>`;
     } else if (s.kind === "end") {
       const b = (T.endButtons || []).find((x) => x.id === s.id);
-      h += `<dl class="kv"><dt>Кнопка</dt><dd><b>${esc(b.id)}</b> · ${esc(b.note)}</dd></dl><p class="hint">Її натискають як кінець маршруту відправлення: спершу виберіть вихідний світлофор (Ч2, Ч3, Ч4, Ч6) → «Встановити поїзний маршрут».</p>`;
+      const ex = Object.values(D.routes).filter((r) => r.ends.includes(b.id)).map((r) => r.from);
+      h += `<dl class="kv"><dt>Кнопка</dt><dd><b>${esc(b.id)}</b> · ${esc(b.note)}</dd></dl><p class="hint">Її натискають як кінець маршруту відправлення: спершу виберіть вихідний світлофор (${esc(ex.join(", "))}) → «Встановити поїзний маршрут».</p>`;
     }
     if (box.__h === h) return;
     box.__h = h;
@@ -489,11 +497,19 @@
 
   // recommendation: which routes to set for an event
   function advice(ev) {
-    if (!ev.parity || !ev.recTrack) return null;
+    if (!ev.parity) return null;
+    if (ev.ev.action === "depart") {
+      const sec = sim.findConsist(ev.ev.consist);
+      const exitSig = sec && T.exitSignals[ev.parity][sec];
+      const rOut = exitSig && Object.values(D.routes).find((r) => r.from === exitSig && r.type === "train");
+      return { depart: true, track: sec ? trackName(sec) : null, exitSig, outEnd: rOut && rOut.ends[0] };
+    }
+    if (!ev.recTrack) return null;
     const entry = T.entrySignal[ev.parity];
     const rIn = Object.values(D.routes).find((r) => r.from === entry && r.to === ev.recTrack);
-    const exitSec = Object.keys(T.exitSignals[ev.parity]).find((k) => k.startsWith(ev.recTrack + "-"));
-    const exitSig = T.exitSignals[ev.parity][exitSec];
+    const exM = T.exitSignals[ev.parity] || {};
+    const exitSec = Object.keys(exM).find((k) => k === ev.recTrack || k.startsWith(ev.recTrack + "-"));
+    const exitSig = exM[exitSec];
     const rOut = exitSig && Object.values(D.routes).find((r) => r.from === exitSig && r.type === "train");
     return { track: trackName(ev.recTrack), entry, rIn: rIn && rIn.id, inEnd: rIn && rIn.ends[0], exitSig, outEnd: rOut && rOut.ends[0] };
   }
@@ -501,8 +517,11 @@
   const statusInfo = (ev) => {
     const late = sim.lateMin(ev);
     if (ev.status === "config") return ["p-config", "уточнити"];
-    if (ev.status === "passed") return [late > 0 ? "p-late" : "p-passed", late > 0 ? "проїхав, запізн. " + late + " хв" : "проїхав за графіком"];
-    if (ev.status === "waiting") return ["p-late", "затримано на перегоні" + (late ? " +" + late + " хв" : "")];
+    if (ev.status === "passed") {
+      const w = ev.ev.action === "arrive" ? "прибув" : ev.ev.action === "depart" ? "відправився" : ev.ev.type === "shunting" ? "виконано" : "проїхав";
+      return [late > 0 ? "p-late" : "p-passed", late > 0 ? w + ", запізн. " + late + " хв" : w + " за графіком"];
+    }
+    if (ev.status === "waiting") return ["p-late", (ev.waitWhy || (ev.ev.type === "shunting" ? "відкладено" : "затримано на перегоні")) + (late ? " +" + late + " хв" : "")];
     if (ev.status === "active") {
       const tr = sim.S.trains.find((t) => t.id === ev.trainId);
       const txt = tr ? tr.status : "активний";
@@ -510,11 +529,11 @@
     }
     return ["p-planned", "модельний час"];
   };
-  const typeShort = { passenger: "пас", freight: "тов", shunting: "ман", electric: "ел", intercity: "ІС+", test: "тест", household: "хоз", reserve: "рез" };
+  const typeShort = { passenger: "пас", freight: "тов", shunting: "ман", electric: "ел", intercity: "ІС+", test: "тест", household: "хоз", reserve: "рез", suburban: "прим" };
   const BASE_DATE = Date.UTC(2014, 9, 28);
   const dateStr = (day) => { const d = new Date(BASE_DATE + (day - 1) * 86400000); return String(d.getUTCDate()).padStart(2, "0") + "." + String(d.getUTCMonth() + 1).padStart(2, "0") + "." + d.getUTCFullYear(); };
   const ends = (ev) => {
-    if (ev.ev.type === "shunting") return ["Сокологірне", "Сокологірне"];
+    if (ev.ev.type === "shunting") return [T.station, T.station];
     if (ev.ev.from) return [ev.ev.from, ev.ev.to];
     return ev.ev.direction === "Dzhankoi" ? ["Мелітополь", "Джанкой"] : ["Джанкой", "Мелітополь"];
   };
@@ -557,14 +576,27 @@
   $("evTable").addEventListener("click", (e) => { const r = e.target.closest("tr.ev"); if (!r) return; openInfo(+r.dataset.i, e.clientX, e.clientY); });
   $("trainBox").addEventListener("change", (e) => { const i = e.target.dataset.d; if (i == null) return; sim.setDelay(+i, Math.max(0, +e.target.value || 0)); refresh(); });
 
+  function stepHtml(st) {
+    if (st.wait) return "чекати " + Math.round(st.wait / 60) + " хв";
+    if (st.leave) return st.ready ? "виставити состав для відправлення" : "відчепити й залишити вагони";
+    if (st.couple) return "причепити вагони";
+    if (st.attach) return "причепитися до состава з боку відправлення";
+    const sig = st.sig && st.sig[0] === "@" ? "світлофор " + (st.sig[1] === "L" ? "у бік Берди/лівої горловини" : "у бік правої горловини") + ", що стоїть перед локомотивом" : "<b>" + esc(st.sig) + "</b>";
+    const end = [].concat(st.end).map(esc).join(" або ");
+    return sig + " → «Встановити маневровий маршрут» → кінець <b>" + end + "</b>" + (st.txt ? " (" + esc(st.txt) + ")" : "");
+  }
   function adviceHtml(ev) {
-    const job = ev.ev.job && P.shuntingJobs[ev.ev.job];
+    const job = ev.ev.job && (ev.plan || P.shuntingJobs[ev.ev.job]);
     if (job) {
-      const steps = job.plan.map((st) => st.wait ? "чекати " + Math.round(st.wait / 60) + " хв" : "<b>" + esc(st.sig) + "</b> → «Встановити маневровий маршрут» → кінець <b>" + esc(st.end) + "</b>").join("; потім ");
-      return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name)}. Локомотив з'явиться на ділянці <b>${esc(job.start)}</b>. Порядок: ${steps}.</div>`;
+      const note = ev.ev.note ? `<div class="adv-note">${esc(ev.ev.note)}</div>` : "";
+      if (!job.plan) return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name)}. План складається, коли состав стоятиме на колії.${note}</div>`;
+      const steps = job.plan.map(stepHtml).join("; потім ");
+      return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name || P.shuntingJobs[ev.ev.job].name)}. Локомотив з'явиться на ділянці <b>${esc(job.start)}</b>. Порядок: ${steps}.${note}</div>`;
     }
     const a = advice(ev); if (!a) return "";
     const note = ev.ev.note ? `<div class="adv-note">${esc(ev.ev.note)}</div>` : "";
+    if (a.depart) return `<div class="advice"><b>Порада ДСП:</b> ${a.track ? "состав стоїть на <b>" + esc(a.track) + "</b>" : "состав ще не готовий"}. Відправлення: <b>${esc(a.exitSig || "вихідний світлофор колії")}</b> → «Встановити поїзний маршрут» → кінець <b>${esc(a.outEnd || "")}</b>. Поїзд рушить не раніше часу за графіком.${note}</div>`;
+    if (T.terminal) return `<div class="advice"><b>Порада ДСП:</b> прийом на <b>${esc(a.track)}</b>: світлофор <b>${esc(a.entry)}</b> → «Встановити поїзний маршрут» → кінець <b>${esc(a.inEnd || "")}</b> (або сама колія). Станція тупикова: поїзд залишиться на колії до зворотного рейсу.${note}</div>`;
     return `<div class="advice"><b>Порада ДСП:</b> прийом на <b>${esc(a.track)}</b>: світлофор <b>${esc(a.entry)}</b> → «Встановити поїзний маршрут» → кінець <b>${esc(a.inEnd || "")}</b> (або сама колія). ${ev.ev.stopMin ? "Стоянка " + ev.ev.stopMin + " хв, потім" : "Далі"} відправлення: <b>${esc(a.exitSig || "")}</b> → «Встановити поїзний маршрут» → кінець <b>${esc(a.outEnd || "")}</b>.${note}</div>`;
   }
 
@@ -648,7 +680,7 @@
   // ---------- графік руху: time–distance chart, plan dashed, executed solid ----------
   const G = { span: window.innerWidth < 600 ? 2 : 4, follow: true, start: 0, last: 0 };
   [...$("gSpan").children].forEach((x) => x.classList.toggle("on", +x.dataset.h === G.span));
-  const GCOL = { passenger: "#ff5a4e", intercity: "#ff8a3d", electric: "#2fe05a", freight: "#e8eef0", test: "#9a9a9a", shunting: "#ffd23f", household: "#ff9fcf", reserve: "#bdbdbd" };
+  const GCOL = { passenger: "#ff5a4e", intercity: "#ff8a3d", electric: "#2fe05a", suburban: "#2fe05a", freight: "#e8eef0", test: "#9a9a9a", shunting: "#ffd23f", household: "#ff9fcf", reserve: "#bdbdbd" };
   function drawGraph(force) {
     const S = sim.S, cv = $("graph");
     const nowKey = Math.floor(S.time / 5) + ":" + S.day + ":" + G.span + ":" + G.start + ":" + G.follow;
@@ -658,11 +690,11 @@
     if (!W) return;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const css = getComputedStyle(document.body);
+    const css = getComputedStyle(document.body), T_ = !!T.terminal;
     const col = (v) => css.getPropertyValue(v).trim();
     c.fillStyle = col("--panel"); c.fillRect(0, 0, W, H);
     const L = W < 500 ? 66 : 96, R = 10, top = 26, bot = H - 24;
-    const yTop = top, yBot = bot, yA = top + (bot - top) * 0.38, yB = top + (bot - top) * 0.62;
+    const yTop = top, yBot = bot, yA = top + (bot - top) * (T.terminal ? 0.62 : 0.38), yB = T.terminal ? bot : top + (bot - top) * 0.62;
     const span = G.span * 3600;
     if (G.follow) G.start = Math.max(0, Math.min(86400 - span, S.time - span * 0.3));
     const t0 = G.start, t1 = t0 + span;
@@ -670,10 +702,10 @@
     // rows
     c.fillStyle = "rgba(127,127,127,.12)"; c.fillRect(L, yA, W - L - R, yB - yA);
     c.strokeStyle = col("--line"); c.lineWidth = 1;
-    [yTop, yA, yB, yBot].forEach((y) => { c.beginPath(); c.moveTo(L, y); c.lineTo(W - R, y); c.stroke(); });
+    (T.terminal ? [yTop, yA, yB] : [yTop, yA, yB, yBot]).forEach((y) => { c.beginPath(); c.moveTo(L, y); c.lineTo(W - R, y); c.stroke(); });
     c.fillStyle = col("--fg"); c.font = "600 " + (W < 500 ? 10 : 11) + "px " + col("--font-mono"); c.textBaseline = "middle";
-    const names = W < 500 ? ["Якимівка", "Сокол.", "Партизани"] : ["Якимівка", "Сокологірне", "Партизани"];
-    c.fillText(names[0], 4, yTop); c.fillText(names[1], 4, (yA + yB) / 2); c.fillText(names[2], 4, yBot);
+    const names = (V.graph || ["", T.station, ""]).map((n) => (W < 500 && n.length > 9 ? n.slice(0, 7) + "." : n));
+    c.fillText(names[0], 4, yTop); c.fillText(names[1], 4, (yA + yB) / 2); if (names[2]) c.fillText(names[2], 4, yBot);
     // time grid
     const step = [900, 1800, 3600, 7200, 10800].find((st) => (st / span) * (W - L - R) >= 56) || 10800;
     c.textBaseline = "alphabetic"; c.font = "10px " + col("--font-mono"); c.fillStyle = col("--muted");
@@ -681,7 +713,7 @@
       const x = X(t); c.strokeStyle = "rgba(127,127,127,.18)"; c.beginPath(); c.moveTo(x, top - 6); c.lineTo(x, bot); c.stroke();
       c.fillText(E.fmt(t).slice(0, 5), x - 14, H - 6);
     }
-    const lead = (ev) => ((P.appearLeadMin[ev.ev.type] || 3) * 60);
+    const lead = (ev) => ((ev.ev.action === "depart" ? -(P.departLeadMin || 6) : P.appearLeadMin[ev.ev.type] || 3) * 60);
     // everything inside the plot is clipped to the time window; train numbers never overlap
     c.save(); c.beginPath(); c.rect(L, 0, W - L - R, H); c.clip();
     const used = { top: [], bot: [], mid: [] };
@@ -699,8 +731,8 @@
       const yIn = odd ? yTop : yBot, yEdgeIn = odd ? yA : yB, yEdgeOut = odd ? yB : yA, yOut = odd ? yBot : yTop;
       let planPts, sh = ev.ev.type === "shunting";
       if (sh) {
-        const job = P.shuntingJobs[ev.ev.job] || P.shuntingPlan;
-        const dur = job.plan.reduce((a, st) => a + (st.wait || 180), 0);
+        const job = ev.plan || P.shuntingJobs[ev.ev.job] || P.shuntingPlan;
+        const dur = job.plan ? job.plan.reduce((a, st) => a + (st.wait || 180), 0) : job.estSec || 1200;
         if (T + dur < t0 || T > t1) return;
         c.fillStyle = "rgba(255,210,63,.18)"; c.fillRect(X(T), yA + 3, Math.max(2, X(T + dur) - X(T)), yB - yA - 6);
         const m = ev.marks;
@@ -708,8 +740,11 @@
         label("mid", Math.max(L + 2, X(T) + 2), yA + 12, ev.ev.train, color);
         return;
       }
-      planPts = [[T - lead(ev), yIn], [T - 30, yEdgeIn], [T + stop, yEdgeOut], [T + stop + 240, yOut]];
-      if (planPts[3][0] < t0 || planPts[0][0] > t1) return;
+      const yMid = (yA + yB) / 2;
+      if (T_ && ev.ev.action === "arrive") planPts = [[T - lead(ev), yTop], [T - 30, yA], [T + 90, yMid]];
+      else if (T_ && ev.ev.action === "depart") planPts = [[T - 300, yMid], [T, yA], [T + 240, yTop]];
+      else planPts = [[T - lead(ev), yIn], [T - 30, yEdgeIn], [T + stop, yEdgeOut], [T + stop + 240, yOut]];
+      if (planPts[planPts.length - 1][0] < t0 || planPts[0][0] > t1) return;
       c.strokeStyle = color; c.globalAlpha = 0.55; c.setLineDash([5, 4]); c.lineWidth = 1.2;
       c.beginPath(); planPts.forEach(([t, y], k) => (k ? c.lineTo(X(t), y) : c.moveTo(X(t), y))); c.stroke();
       c.setLineDash([]); c.globalAlpha = 1;
@@ -717,13 +752,18 @@
       const m = ev.marks;
       if (m && m.appear != null) {
         const tr = S.trains.find((x) => x.id === ev.trainId);
-        const pts = [[m.appear, yIn]];
-        if (m.arrive != null) pts.push([m.arrive, yEdgeIn]);
-        if (m.depart != null) pts.push([m.depart, yEdgeOut]);
-        if (m.gone != null) pts.push([m.gone, yOut]);
-        else if (tr && !tr.done) {
+        const pts = T_ ? [[m.appear, ev.ev.action === "depart" ? yMid : yTop]] : [[m.appear, yIn]];
+        if (T_ && ev.ev.action === "arrive") { if (m.arrive != null) pts.push([m.arrive, yA]); if (m.gone != null) pts.push([m.gone, yMid]); }
+        else if (T_) { if (m.depart != null) pts.push([m.depart, yA]); if (m.gone != null) pts.push([m.gone, yTop]); }
+        else {
+          if (m.arrive != null) pts.push([m.arrive, yEdgeIn]);
+          if (m.depart != null) pts.push([m.depart, yEdgeOut]);
+          if (m.gone != null) pts.push([m.gone, yOut]);
+        }
+        if (m.gone == null && tr && !tr.done) {
           const k = D.sections[tr.seq[tr.idx]].kind;
-          const y = m.depart != null ? yEdgeOut + (yOut - yEdgeOut) * 0.5 : m.arrive != null ? (k === "track" ? (yEdgeIn + yEdgeOut) / 2 : yEdgeIn + (yEdgeOut - yEdgeIn) * 0.25) : yIn + (yEdgeIn - yIn) * (tr.wait ? 0.95 : 0.5);
+          const y = T_ ? (ev.ev.action === "depart" ? (m.depart != null ? (yA + yTop) / 2 : yMid) : m.arrive != null ? (yA + yMid) / 2 : yTop + (yA - yTop) * (tr.wait ? 0.95 : 0.5))
+            : m.depart != null ? yEdgeOut + (yOut - yEdgeOut) * 0.5 : m.arrive != null ? (k === "track" ? (yEdgeIn + yEdgeOut) / 2 : yEdgeIn + (yEdgeOut - yEdgeIn) * 0.25) : yIn + (yEdgeIn - yIn) * (tr.wait ? 0.95 : 0.5);
           pts.push([S.time, y]);
         }
         c.strokeStyle = color; c.lineWidth = 2;
@@ -731,7 +771,8 @@
       }
       const lx = Math.max(L + 2, X(planPts[0][0]) + 2);
       const late = sim.lateMin(ev);
-      label(odd ? "top" : "bot", lx, odd ? yTop - 5 : yBot + 13, ev.ev.train + (late > 0 ? " +" + late : ""), late > 0 ? "#ff5a4e" : color);
+      const row = T_ ? "top" : odd ? "top" : "bot";
+      label(row, lx, row === "top" ? yTop - 5 : yBot + 13, ev.ev.train + (late > 0 ? " +" + late : ""), late > 0 ? "#ff5a4e" : color);
     });
     // now
     if (S.time >= t0 && S.time <= t1) { c.strokeStyle = "#ff2b2b"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(S.time), top - 10); c.lineTo(X(S.time), bot); c.stroke(); }
@@ -799,7 +840,7 @@
     if (!document.body.classList.contains("console-only")) { ui.vs = 1; return; }
     const wrap = $("schemeWrap"), bar = wrap.querySelector(".indbar");
     const w = ZOOMS[ui.zoom] || wrap.clientWidth || window.innerWidth, want = window.innerHeight * 0.7 - (bar ? bar.offsetHeight : 0);
-    ui.vs = Math.max(1, Math.min(4.5, want / ((w / 2895) * VH)));
+    ui.vs = Math.max(1, Math.min(4.5, want / ((w / BOX[2]) * VH)));
   }
   $("btnConsole").onclick = () => {
     const on = document.body.classList.toggle("console-only");
@@ -815,6 +856,20 @@
   $("tabSim").onclick = () => { $("viewSim").hidden = false; $("viewHist").hidden = true; $("tabSim").classList.add("on"); $("tabHist").classList.remove("on"); };
   $("tabHist").onclick = () => { $("viewSim").hidden = true; $("viewHist").hidden = false; $("tabHist").classList.add("on"); $("tabSim").classList.remove("on"); };
   const lvl = { plan: ["p-hist", "підтверджено планом / посібником"], source: ["p-hist", "джерело наведено, не перевірено повністю"], unconfirmed: ["p-planned", "не підтверджено"] };
+  // ---------- station: names, menu, station-specific help and sources ----------
+  document.title = "АРМ ДСП " + T.station;
+  $("brandName").textContent = "АРМ ДСП · " + T.station;
+  $("brandSub").textContent = "Навчальна модель МПЦ · план від " + T.planDate;
+  $("stName").textContent = T.station;
+  document.querySelectorAll("[data-station]").forEach((n) => (n.hidden = n.dataset.station !== T.id));
+  const SD = window.STATION_DATA || {};
+  $("stationList").innerHTML = Object.values(SD).map((st) => `<button data-st="${esc(st.id)}" class="${st.id === T.id ? "on" : ""}"><b>${esc(st.name)}</b><span>${esc(st.note || "")}</span></button>`).join("");
+  $("stationList").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-st]"); if (!b || b.dataset.st === T.id) return;
+    confirmCmd("СТ", SD[b.dataset.st].name, "Перейти на станцію " + SD[b.dataset.st].name + " (поточна доба на станції " + T.station + " завершиться)", false, () => { window.selectStation(b.dataset.st); return { ok: true }; });
+  });
+  if (!window.SCHEDULE) { $("selSrc").closest("label").hidden = true; }
+  if (T.id !== "sokologirne") { $("tabHist").hidden = true; }
   $("histList").innerHTML = window.HISTORY_NOTES.map((n) => `<div class="hist-item"><span class="pill ${lvl[n.level][0]}">${lvl[n.level][1]}</span><h3>${esc(n.title)}</h3><p>${esc(n.text)}</p>${n.links.map(([t, u]) => `<div><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a></div>`).join("")}</div>`).join("");
 
   // ---------- loop (fixed 1-second simulation steps) ----------
@@ -852,7 +907,7 @@
     $(btn).addEventListener("click", (e) => { e.stopPropagation(); const open = $(panel).hidden; document.querySelectorAll(".drop-panel").forEach((p) => (p.hidden = true)); $(panel).hidden = !open; $(btn).setAttribute("aria-expanded", String(open)); });
     $(panel).addEventListener("click", (e) => e.stopPropagation());
   }
-  dropToggle("btnTime", "timePanel"); dropToggle("btnSet", "settings");
+  dropToggle("btnTime", "timePanel"); dropToggle("btnSet", "settings"); dropToggle("btnStation", "stationPanel");
   document.addEventListener("click", () => document.querySelectorAll(".drop-panel").forEach((p) => (p.hidden = true)));
   buildSvg();
   refresh(true);

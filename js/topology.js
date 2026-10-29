@@ -11,6 +11,7 @@
  * Edit this file to correct the layout; engine and UI derive everything else.
  */
 window.TOPOLOGY = {
+  id: "sokologirne",
   station: "Сокологірне",
   planDate: "28.10.2014",
   directions: {
@@ -118,7 +119,7 @@ window.TOPOLOGY = {
     { id:"М5",  node:"A2",  dir:"R", side:1,  kind:"shunt", source:"plan" },
     { id:"М7",  node:"M7n", dir:"R", side:1,  kind:"shunt", source:"plan" },
     { id:"М9",  node:"K9",  dir:"R", side:1,  kind:"shunt", source:"plan",
-      lead:{ "14П":"19СП", "15П":"19СП" }, note:"виїзд з колій 14/15 через стрілку 19 (рух до сигналу без маршруту — модель)" },
+      note:"виїзд з колій 14/15 через стрілку 19 (рух до сигналу без маршруту — модель)" },
     { id:"М11", node:"A3",  dir:"L", side:-1, kind:"shunt", source:"plan" },
     { id:"М13", node:"F2",  dir:"L", side:-1, kind:"shunt", source:"plan" },
     { id:"М22", node:"F3",  dir:"R", side:1,  kind:"shunt", source:"plan" },
@@ -171,6 +172,20 @@ window.TOPOLOGY = {
     ["8 607", 1200, 148], ["6 624", 1200, 183], ["4 830", 1200, 218], ["II 901", 1200, 252],
     ["I 846", 1200, 289], ["3 854", 1200, 322], ["10", 2060, 183], ["14", 420, 74], ["15", 420, 109]
   ]
+};
+
+// picture around the tracks (display only) and the neighbours for the radio
+window.TOPOLOGY.view = {
+  box: [-165, 48, 2895, 316],
+  platforms: [[1089, 100, 238, 37], [1065, 270, 497, 11], [1065, 339, 497, 11]],
+  notes: [[-150, 226, "← ЯКИМІВКА · парний"], [2440, 352, "ПАРТИЗАНИ · непарний →"], [250, 66, "Тяг. підст. ЕЧ-4"], [2125, 177, "ПЧ-4"], [2385, 205, "1272 км+302 м"]],
+  borders: [[2375, 210, 2375, 355]],
+  blockLabels: [["2НП", -95, 294, 20], ["1НП", 15, 294, 20], ["1ЧП", 2520, 257, -13], ["2ЧП", 2650, 257, -13], ["1НУП", 2490, 294, 20], ["2НУП", 2640, 294, 20], ["1ЧУП", 110, 257, -13], ["2ЧУП", -65, 257, -13]],
+  graph: ["Якимівка", "Сокологірне", "Партизани"]
+};
+window.TOPOLOGY.radio = {
+  sides: { Y: { name: "Якимівка", from: "Якимівки", dsp: "Коваленко", inc: 40 }, P: { name: "Партизани", from: "Партизан", dsp: "Мельник", inc: 60 } },
+  odd: { back: "Y", fwd: "P" }, even: { back: "P", fwd: "Y" }
 };
 
 /*
