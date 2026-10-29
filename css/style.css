@@ -541,7 +541,23 @@ body.grey-console .late, body.grey-console .adv-note { color: #ffe0dc; font-weig
 .st-list button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 10px; }
 .st-list button span { font-size: 12px; color: var(--muted); }
 .st-list button.on { border-color: var(--fg); }
+.st-list .st-cap { font-size: 12px; color: var(--muted); margin-top: 6px; text-transform: uppercase; letter-spacing: .04em; }
+.st-list button:disabled { opacity: .5; cursor: not-allowed; }
 
 .sw-lockf { fill: none; stroke: #ffffff; stroke-width: 1.6; stroke-dasharray: 3 2; }
 .tube-o, .tube-i { stroke-linejoin: miter; stroke-miterlimit: 4; }
 .bufstop { fill: #ffffff; stroke: none; }
+
+/* line mode: all stations of the line in one strip, trains between them */
+.line-strip { display: flex; align-items: stretch; gap: 0; margin: 0 0 8px; border: 1px solid var(--line, #555); background: var(--panel, #111); overflow-x: auto; }
+.line-strip .ls-st { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; padding: 6px 12px; border: 0; border-right: 1px solid var(--line, #555); background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; min-width: 120px; }
+.line-strip .ls-st b { font-size: 13px; letter-spacing: .03em; text-transform: uppercase; }
+.line-strip .ls-st span { font-size: 11px; color: var(--muted); }
+.line-strip .ls-st.me { background: #fff; color: #000; }
+.line-strip .ls-st.me span { color: #333; }
+.line-strip .ls-st.other { outline: 2px dashed var(--fg, #fff); outline-offset: -4px; }
+.line-strip .ls-st:disabled { cursor: not-allowed; }
+.line-strip .ls-gap { flex: 1 1 60px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 8px; border-right: 1px solid var(--line, #555); font-size: 11px; color: var(--muted); min-width: 70px; white-space: nowrap; }
+.line-strip .ls-gap .tr { color: var(--fg, #fff); font-weight: 600; }
+.line-strip .ls-gap.single::before { content: "одноколійна"; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.line-strip .ls-end { flex: 0 0 auto; padding: 6px 10px; font-size: 11px; color: var(--muted); display: flex; align-items: center; border-right: 1px solid var(--line, #555); }

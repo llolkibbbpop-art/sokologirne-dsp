@@ -12,15 +12,18 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  // neighbour stations and which side a train comes from / goes to — from the station description
-  const RC = (window.TOPOLOGY && window.TOPOLOGY.radio) || { sides: {}, odd: {}, even: {} };
-  const NB = RC.sides;
-  const SIDES = Object.keys(NB);
-  const ME = (window.TOPOLOGY && window.TOPOLOGY.station) || "Сокологірне";
   const hhmm = (t) => { t = ((t % 86400) + 86400) % 86400; return String(Math.floor(t / 3600)).padStart(2, "0") + " год " + String(Math.floor((t % 3600) / 60)).padStart(2, "0") + " хв"; };
 
-  function init(getSim, hooks) {
-    let R = fresh();
+  function init(getSim, hooks, T) {
+    // neighbour stations and which side a train comes from / goes to — from the station description
+    T = T || window.TOPOLOGY;
+    const RC = (T && T.radio) || { sides: {}, odd: {}, even: {} };
+    const NB = RC.sides;
+    const SIDES = Object.keys(NB);
+    const ME = (T && T.station) || "Сокологірне";
+    // the state may outlive this window (line mode: the DSP switches between stations)
+    const store = (hooks && hooks.store) || {};
+    let R = store.R || (store.R = fresh());
     function fresh() {
       const o = (f) => Object.fromEntries(SIDES.map((k) => [k, f(k)]));
       return { msgs: [], journal: o(() => []), out: o(() => 0), inc: o((k) => NB[k].inc || 40), later: [], called: {}, sRef: null, seq: 0 };
@@ -91,7 +94,7 @@
     // ---------- periodic checks: overdue duties, delayed arrival reports, driver calls
     function tick() {
       const S = sim().S;
-      if (R.sRef !== S) { if (R.sRef) R = fresh(); R.sRef = S; render(); }
+      if (R.sRef !== S) { if (R.sRef) R = store.R = fresh(); R.sRef = S; render(); }
       R.later = R.later.filter((x) => {
         if (S.time < x.at) return true;
         incoming(x.side, "Поїзд № " + x.train + " прибув о " + hhmm(x.at) + ".", x.train);

@@ -250,6 +250,8 @@
       if (S.routes[rid]) return "Маршрут " + rid + " вже задано";
       if (S.sig[R.from].blocked) return "Світлофор " + R.from + " заблоковано";
       if (Object.values(S.routes).some((r) => r.state === "setting")) return "Йде встановлення іншого маршруту — зачекайте кілька секунд";
+      // line mode: the neighbouring station decides whether a single-track line may be taken
+      if (opts && opts.lineGate && R.type === "train") { const why = opts.lineGate(R, S); if (why) return why; }
       const lastSec = R.sections[R.sections.length - 1];
       for (const s of R.sections) {
         const st = S.sec[s];
@@ -783,6 +785,8 @@
       for (const ev of S.events) {
         if (ev.test) continue;
         if (ev.status !== "planned" && ev.status !== "waiting") continue;
+        // line mode: an arrival from a neighbouring station waits until that station has sent the train
+        if (opts && opts.hold && opts.hold(ev, S)) continue;
         const lead = ev.ev.action === "depart" ? (P.departLeadMin || 6) : typeof P.appearLeadMin === "object" ? (P.appearLeadMin[ev.ev.type] ?? 3) : P.appearLeadMin;
         const appear = ev.time + ev.delayMin * 60 - lead * 60;
         if (S.time < appear) continue;
@@ -932,7 +936,7 @@
       setSchedule, D, get S() { return S; }, reset, step, run, setRoute, openSignal, closeSignal, cancelRoute, moveSwitch,
       toggleSwitchLock, toggleSwitchBlock, toggleSectionBlock, toggleSignalBlock, artRelease, inviteSignal, setFault,
       spawnLoco, removeLoco, setMode, toggleFault, setDelay, addTestTrain, checkRoute, routesFrom, routeDef,
-      nextEvent, isIdle, lateMin, blocksFor, fmt, on: (f) => listeners.push(f), routeFromSignal, buildEvents: () => (S.events = buildEvents()), kindOf, findConsist,
+      nextEvent, isIdle, lateMin, blocksFor, fmt, on: (f) => { listeners.push(f); return () => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }; }, routeFromSignal, buildEvents: () => (S.events = buildEvents()), kindOf, findConsist,
       log: (k, t) => log(k, t), KIT_NAME
     };
   }

@@ -13,6 +13,15 @@
   const order = ["sokologirne"].concat(Object.keys(reg).filter((k) => k !== "sokologirne"));
   const sorted = {}; order.forEach((k) => (sorted[k] = reg[k]));
   Object.keys(reg).forEach((k) => delete reg[k]); Object.assign(reg, sorted);
+  // line mode (several stations together): #line=<id>[&p=<station>]
+  const lm = /(?:^|[#&])line=([a-z0-9]+)/.exec(location.hash || "");
+  if (lm) {
+    window.LINE_ID = lm[1];
+    const pm = /(?:^|[#&])p=([a-z0-9]+)/.exec(location.hash || "");
+    let pl = pm && pm[1];
+    if (!pl) { try { pl = localStorage.getItem("dsp-line-player"); } catch (e) { /* storage unavailable */ } }
+    window.LINE_PLAYER = pl || null;
+  }
   let id = null;
   const m = /(?:^|[#&])st=([a-z0-9]+)/.exec(location.hash || "");
   if (m) id = m[1];
@@ -25,9 +34,13 @@
   window.SCHEDULE = st.SCHEDULE || null;
   window.ScheduleGenerator = { generate: st.generate };
   window.selectStation = function (nid) {
-    if (!reg[nid] || nid === id) return;
+    if (!reg[nid] || (nid === id && !window.LINE_ID)) return;
     try { localStorage.setItem("dsp-station", nid); } catch (e) { /* storage unavailable */ }
     location.hash = "st=" + nid;
+    location.reload();
+  };
+  window.selectLine = function (lid) {
+    location.hash = "line=" + lid;
     location.reload();
   };
 })();
