@@ -69,6 +69,10 @@
         if (f.type !== "freight") continue;
         const fast = L.slice(i + 1).find((t) => t.m - f.m <= 14 && SPEED_RANK[t.type] > 1);
         if (fast) {
+          // the freight must clear the throat well before the faster train: arrive ≥ 9 min ahead
+          const prevSame = L[i - 1];
+          const earliest = prevSame ? prevSame.m + HEADWAY : 0;
+          if (fast.m - f.m < 9 && fast.m - 9 >= earliest) f.m = fast.m - 9;
           const stop = Math.ceil(fast.m - f.m) + 3;
           const trk = SIDE[par].find((t) => free(t, f.m - 3, f.m + stop + 5));
           if (!trk) continue; // no free side track: the freight runs ahead on the main track

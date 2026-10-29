@@ -96,53 +96,70 @@ window.TOPOLOGY = {
     { id:"4",  node:"S4",  common:"B5", plus:"B6", minus:"S2", label:-1 },
     { id:"2",  node:"S2",  common:"A7", plus:"A6", minus:"S4", label:1 }
   ],
-  // dir: direction a train passes the signal; side: label above(-1)/below(+1) the track
+  // dir: direction a movement passes the signal (R = to Партизани, L = to Якимівка);
+  // side: drawn above (-1) or below (+1) the track. On the plan signals for the even
+  // direction (L) are drawn above the track and odd ones (R) below — side follows that.
   signals: [
-    { id:"Н",  node:"A1", dir:"R", side:1,  kind:"entry",  approach:"1НП", approachChain:["2НП","1НП"], source:"plan" },
-    { id:"Ч",  node:"B6", dir:"L", side:-1, kind:"entry",  approach:"1ЧП", approachChain:["2ЧП","1ЧП"], source:"plan" },
+    { id:"Н",  node:"A1", dir:"R", side:1,  kind:"entry", approachChain:["2НП","1НП"], source:"plan" },
+    { id:"Ч",  node:"B6", dir:"L", side:-1, kind:"entry", approachChain:["2ЧП","1ЧП"], source:"plan" },
+    { id:"ЧД", node:"A7", dir:"L", side:1,  kind:"entry", approachChain:["2НУП","1НУП"], source:"plan",
+      note:"додатковий вхідний на неправильну (непарну) колію" },
     { id:"Н1", node:"A4", dir:"R", side:1,  kind:"exit", source:"plan" },
     { id:"Н3", node:"G2", dir:"R", side:1,  kind:"exit", source:"plan" },
     { id:"Н4", node:"C2", dir:"R", side:1,  kind:"exit", source:"plan" },
     { id:"Н6", node:"D3", dir:"R", side:1,  kind:"exit", source:"plan" },
-    { id:"Ч2", node:"B2", dir:"L", side:-1, kind:"exit", source:"plan",
-      note:"на плані підписано «Ч-2»; вихідний з колії II" },
+    { id:"Ч2", node:"B2", dir:"L", side:-1, kind:"exit", source:"plan", note:"на плані підписано «Ч-2»; вихідний з колії II" },
     { id:"Ч3", node:"G1", dir:"L", side:-1, kind:"exit", source:"plan" },
     { id:"Ч4", node:"C1", dir:"L", side:-1, kind:"exit", source:"plan" },
     { id:"Ч6", node:"D2", dir:"L", side:-1, kind:"exit", source:"plan" },
-    { id:"М13", node:"F2", dir:"L", side:-1, kind:"shunt", source:"plan" },
-    { id:"М9", node:"K9", dir:"R", side:1, kind:"shunt", source:"plan",
-      note:"за планом стоїть на з'єднанні від стрілки 19 до 15; призначення (вихід з колій 14/15) — припущення" },
-    { id:"ЧД", node:"A7", dir:"L", side:1, kind:"decor", source:"plan", note:"вхід на неправильну колію — не моделюється" }
+    // shunting signals (odd numbers — left throat, even — right throat, as on the plan)
+    { id:"М1",  node:"M1n", dir:"R", side:1,  kind:"shunt", source:"plan" },
+    { id:"М3",  node:"B1",  dir:"R", side:1,  kind:"shunt", source:"plan" },
+    { id:"М5",  node:"A2",  dir:"R", side:1,  kind:"shunt", source:"plan" },
+    { id:"М7",  node:"M7n", dir:"R", side:1,  kind:"shunt", source:"plan" },
+    { id:"М9",  node:"K9",  dir:"R", side:1,  kind:"shunt", source:"plan",
+      lead:{ "14П":"19СП", "15П":"19СП" }, note:"виїзд з колій 14/15 через стрілку 19 (рух до сигналу без маршруту — модель)" },
+    { id:"М11", node:"A3",  dir:"L", side:-1, kind:"shunt", source:"plan" },
+    { id:"М13", node:"F2",  dir:"L", side:-1, kind:"shunt", source:"plan" },
+    { id:"М22", node:"F3",  dir:"R", side:1,  kind:"shunt", source:"plan" },
+    { id:"М20", node:"E1",  dir:"L", side:-1, kind:"shunt", source:"plan" },
+    { id:"М18", node:"B3",  dir:"R", side:1,  kind:"shunt", source:"plan" },
+    { id:"М16", node:"B4",  dir:"L", side:-1, kind:"shunt", source:"plan" },
+    { id:"М8",  node:"A6",  dir:"L", side:-1, kind:"shunt", source:"plan" },
+    { id:"М6",  node:"M6n", dir:"L", side:-1, kind:"shunt", source:"plan" },
+    { id:"М4",  node:"M6n", dir:"R", side:1,  kind:"shunt", source:"plan" },
+    { id:"М2",  node:"M2n", dir:"L", side:-1, kind:"shunt", source:"plan" }
   ],
-  // Shunting signals shown for orientation only (routes from them are not modelled)
-  decorSignals: [
-    // positions follow the square schematic: each signal stays on the same side of its switch as on the plan
-    ["М1",215,309],["М3",226,272],["М5",458,309],["М7",667,200],["М11",720,277],
-    ["М22",1445,167],["М20",1800,174],["С30",1885,174],["М18",1752,272],["М16",1860,245],
-    ["М8",2052,281],["М6",2226,244],["М4",2216,270],["М2",2335,276]
+  // Objects on the plan that are not signals controlled from the АРМ
+  markers: [
+    { id:"С30", node:"E1", dx:110, side:-1, note:"на плані позначено іншим знаком, ніж світлофори (похилий штрих). Ймовірно, сигнальний знак або пристрій на колії 10 — призначення потребує уточнення, тому ним не керують." }
   ],
-  // Route definitions: node path starting at the signal. Sections and switch
-  // positions are derived from the path by the engine.
+  // End buttons for departure routes where there is no opposing signal at the station border
+  endButtons: [
+    { id:"ВЯ", node:"B1", dx:-70, side:-1, label:"відпр. ЯКИМІВКА", note:"кнопка кінця маршруту відправлення на Якимівку" }
+  ],
+  // Route definitions: node path starting at the signal. Sections and switch positions are
+  // derived from the path by the engine. ends: what the DSP clicks to finish the route
+  // (opposing signal at the near end of the receiving track, the track itself, or an end button).
+  // Shunting routes are generated automatically from signal to signal by the engine.
   routes: [
-    { id:"Н→I",  from:"Н", to:"IП", type:"train", path:["A1","S1","A2","S9","S17","A3","A4"] },
-    { id:"Н→3",  from:"Н", to:"3П", type:"train", path:["A1","S1","A2","S9","S17","G1","G2"] },
-    { id:"Н→4",  from:"Н", to:"4П", type:"train", path:["A1","S1","S3","S5","S11","C1","C2"] },
-    { id:"Н→6",  from:"Н", to:"6П", type:"train", path:["A1","S1","S3","S5","S11","S13","D2","D3"] },
-    { id:"Ч→II", from:"Ч", to:"IIП", type:"train", path:["B6","S4","B5","S6","B4","S14","B3","B2"] },
-    { id:"Ч→4",  from:"Ч", to:"4П", type:"train", path:["B6","S4","B5","S6","B4","S14","S16","C2","C1"] },
-    { id:"Ч→6",  from:"Ч", to:"6П", type:"train", path:["B6","S4","B5","S6","B4","S14","S16","S18","S20","D3","D2"] },
-    { id:"Ч→3",  from:"Ч", to:"3П", type:"train", path:["B6","S4","B5","S6","S8","A5","S10","G2","G1"] },
-    { id:"Н1→",  from:"Н1", to:"НУП", type:"train", path:["A4","S10","A5","S8","A6","S2","A7","A8"] },
-    { id:"Н3→",  from:"Н3", to:"НУП", type:"train", path:["G2","S10","A5","S8","A6","S2","A7","A8"] },
-    { id:"Н4→",  from:"Н4", to:"НУП", type:"train", path:["C2","S16","S14","B4","S6","B5","S4","S2","A7","A8"] },
-    { id:"Н6→",  from:"Н6", to:"НУП", type:"train", path:["D3","S20","S18","S16","S14","B4","S6","B5","S4","S2","A7","A8"] },
-    { id:"Ч2→",  from:"Ч2", to:"ЧУП", type:"train", path:["B2","S7","S5","S3","B1","B0"] },
-    { id:"Ч4→",  from:"Ч4", to:"ЧУП", type:"train", path:["C1","S11","S5","S3","B1","B0"] },
-    { id:"Ч6→",  from:"Ч6", to:"ЧУП", type:"train", path:["D2","S13","S11","S5","S3","B1","B0"] },
-    { id:"Ч3→",  from:"Ч3", to:"ЧУП", type:"train", path:["G1","S17","S9","S7","S5","S3","B1","B0"] },
-    { id:"М13→14", from:"М13", to:"14П", type:"shunt", path:["F2","S15","K9","S19","J14","H14"] },
-    { id:"М9→8", from:"М9", to:"8П", type:"shunt", path:["J14","S19","K9","S15","F2","F3"],
-      note:"маршрут починається з колії 14 через стрілку 19 до сигналу М9 — модельне спрощення" }
+    { id:"Н→I",  from:"Н", to:"IП", type:"train", ends:["М11","IП"], path:["A1","S1","A2","S9","S17","A3","A4"] },
+    { id:"Н→3",  from:"Н", to:"3П", type:"train", ends:["Ч3","3П"], path:["A1","S1","A2","S9","S17","G1","G2"] },
+    { id:"Н→4",  from:"Н", to:"4П", type:"train", ends:["Ч4","4П"], path:["A1","S1","S3","S5","S11","C1","C2"] },
+    { id:"Н→6",  from:"Н", to:"6П", type:"train", ends:["Ч6","6П"], path:["A1","S1","S3","S5","S11","S13","D2","D3"] },
+    { id:"Ч→II", from:"Ч", to:"IIП", type:"train", ends:["М18","IIП"], path:["B6","S4","B5","S6","B4","S14","B3","B2"] },
+    { id:"Ч→4",  from:"Ч", to:"4П", type:"train", ends:["Н4","4П"], path:["B6","S4","B5","S6","B4","S14","S16","C2","C1"] },
+    { id:"Ч→6",  from:"Ч", to:"6П", type:"train", ends:["Н6","6П"], path:["B6","S4","B5","S6","B4","S14","S16","S18","S20","D3","D2"] },
+    { id:"Ч→3",  from:"Ч", to:"3П", type:"train", ends:["Н3","3П"], path:["B6","S4","B5","S6","S8","A5","S10","G2","G1"] },
+    { id:"ЧД→3", from:"ЧД", to:"3П", type:"train", ends:["Н3","3П"], path:["A7","S2","A6","S8","A5","S10","G2","G1"] },
+    { id:"Н1→",  from:"Н1", to:"НУП", type:"train", ends:["ЧД"], path:["A4","S10","A5","S8","A6","S2","A7","A8"] },
+    { id:"Н3→",  from:"Н3", to:"НУП", type:"train", ends:["ЧД"], path:["G2","S10","A5","S8","A6","S2","A7","A8"] },
+    { id:"Н4→",  from:"Н4", to:"НУП", type:"train", ends:["ЧД"], path:["C2","S16","S14","B4","S6","B5","S4","S2","A7","A8"] },
+    { id:"Н6→",  from:"Н6", to:"НУП", type:"train", ends:["ЧД"], path:["D3","S20","S18","S16","S14","B4","S6","B5","S4","S2","A7","A8"] },
+    { id:"Ч2→",  from:"Ч2", to:"ЧУП", type:"train", ends:["ВЯ"], path:["B2","S7","S5","S3","B1","B0"] },
+    { id:"Ч4→",  from:"Ч4", to:"ЧУП", type:"train", ends:["ВЯ"], path:["C1","S11","S5","S3","B1","B0"] },
+    { id:"Ч6→",  from:"Ч6", to:"ЧУП", type:"train", ends:["ВЯ"], path:["D2","S13","S11","S5","S3","B1","B0"] },
+    { id:"Ч3→",  from:"Ч3", to:"ЧУП", type:"train", ends:["ВЯ"], path:["G1","S17","S9","S7","S5","S3","B1","B0"] }
   ],
   // Which exit signal a train meets at the end of a track, by train parity
   exitSignals: {
@@ -162,10 +179,17 @@ window.TOPOLOGY = {
  * interlocking uses only the topology, so these overrides change the picture only.
  */
 window.TOPOLOGY.displayNodes = {
-  S3:[272,257], S11:[414,223], X1113:[449,188], A2:[440,294], S9:[478,294], G1:[639,327],
-  S15:[737,153], K9:[700,153], S19:[663,115], J14:[628,80],
-  F3:[1528,153], S18:[1749,188], E1:[1775,188], S16:[1784,223],
-  S10:[1776,294], S6:[2036,257], S2:[2211,294]
+  S3:[272,257], S11:[414,223], X1113:[449,188], A2:[440,294], S9:[478,294],
+  S15:[737,153], K9:[680,153], S19:[642,115], J14:[607,80],
+  F3:[1490,153], S18:[1749,188], E1:[1800,188], S16:[1784,223],
+  S10:[1803,294], S6:[2036,257], S2:[2211,294],
+  B1:[215,257], B4:[1892,257], A6:[2070,294], M1n:[205,294], C1:[600,223], M7n:[665,188]
+};
+// display-only bends: the 45° slope starts beyond the signal standing at the joint (as on the plan)
+window.TOPOLOGY.displayVia = {
+  "S17|G1": [[639, 327]],   // track 3 lead: Ч3 stands on the straight part
+  "G2|S10": [[1770, 327]],  // track 3 to switch 10: Н3/Н1 stand clear of the slope
+  "F3|S20": [[1528, 153]]   // track 8 to switch 20: М22 stands clear of the slope
 };
 
 /*
@@ -224,6 +248,14 @@ window.TOPOLOGY.displayNodes = {
   rename("B1", "S3", "3СП"); rename("S5", "S11", "5СП"); rename("S7", "B2", "7СП");
   rename("A2", "S9", "9СП"); rename("S7", "S9", "9СП"); rename("S17", "A3", "17СП"); rename("S17", "G1", "17СП");
   rename("S11", "C1", "11СП"); rename("S13", "D2", "13СП"); rename("D3", "S20", "20СП"); rename("F3", "S20", "20СП"); rename("S18", "E1", "18СП");
+  // insulating joints at shunting signals (positions from the plan)
+  splitEdge("A1", "S1", [["M1n", 215, 294]], ["НІП", "1СП"]);
+  splitEdge("X1113", "S13", [["M7n", 660, 188]], ["11СП", "13СП"]);
+  splitEdge("S4", "B6", [["M6n", 2240, 257]], ["4СП", "ЧІП"]);
+  splitEdge("S2", "A7", [["M2n", 2335, 294]], ["2СП", "ЧДІП"]);
+  T.sectionInfo["НІП"] = { kind: "switchless", len: 150, label: "Безстрілочна ділянка за вхідним Н", source: "derived" };
+  T.sectionInfo["ЧІП"] = { kind: "switchless", len: 200, label: "Безстрілочна ділянка за вхідним Ч", source: "derived" };
+  T.sectionInfo["ЧДІП"] = { kind: "switchless", len: 90, label: "Безстрілочна ділянка за вхідним ЧД", source: "derived" };
   // station tracks: three blocks each (numbered left to right)
   const tracks = [["IП", "A3", "A4", 846, "Колія I"], ["IIП", "B2", "B3", 901, "Колія II"], ["3П", "G1", "G2", 854, "Колія 3"],
                   ["4П", "C1", "C2", 830, "Колія 4"], ["6П", "D2", "D3", 624, "Колія 6"], ["8П", "F2", "F3", 607, "Колія 8"]];

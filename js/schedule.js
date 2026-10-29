@@ -227,7 +227,7 @@ window.MODEL_PARAMS = {
   directionLabel: { "Dzhankoi":"на Джанкой (непар.)", "Melitopol":"на Мелітополь (пар.)", "station":"по станції" },
   // preferred receiving tracks for through trains (main track first, then side track)
   trackPreference: { odd:["IП","3П"], even:["IIП","4П"] },
-  appearLeadMin: { passenger:3, freight:5, shunting:1, electric:4, intercity:2 }, // minutes before event time the train appears on approach (model)
+  appearLeadMin: { passenger:4, freight:6, shunting:1, electric:5, intercity:3 }, // minutes before event time the train appears on approach (model)
   speedKmh: { passenger:60, freight:40, shunting:15, test:50, electric:55, intercity:90 },
   minSectionSec: 8,
   tailSec: 10,                 // time the train tail keeps the previous section occupied
@@ -239,8 +239,14 @@ window.MODEL_PARAMS = {
   mainTracks: ["IП", "IIП"],
   // Train length in blocks (deterministic "random" from the train number): [min, max]
   trainBlocks: { passenger:[2,3], freight:[3,5], test:[2,3], shunting:[1,1], electric:[2,2], intercity:[2,3] },         // delayed route release when approach is occupied (model)
-  artReleaseSec: 180,          // artificial release time (model)
+  artReleaseSec: 180,         // artificial release 3–4 min (handbook p.144)
   shuntWaitSec: 300,
   shuntingEnabledByDefault: false,
-  shuntingPlan: { start:"8П-1", signals:["М13","М9"], note:"модельний сценарій: 8 → 14 (ЕЧ-4) → 8; призначення сигналу М9 — припущення" }
+  shuntingPlan: { start:"8П-1", plan:[ { sig:"М13", end:"14П" }, { wait:300 }, { sig:"М9", end:"М22" } ],
+    note:"модельний сценарій: 8 → 14 (ЕЧ-4) → 8" },
+  // handbook pp.136–165: switch transfer, cancellation sets, invitation, speed over a diverging switch
+  switchTransferSec: 4,
+  cancelFreeSec: 6,
+  invitationSec: 90,
+  divergingKmh: 50
 };
