@@ -100,9 +100,10 @@
       // blocked: red underlay under the number (handbook p.190); position locked: padlock beside it
       const bl = el("rect", { x: tx - 9, y: ty - 11, width: 18, height: 14, rx: 2, class: "sw-block" }, g);
       const t = el("text", { x: tx, y: ty, "text-anchor": "middle", class: "sw-label" }, g); t.textContent = s.id;
-      const lk = s.lockOut ? el("text", { x: tx, y: ty + (below ? 17 : -17), "text-anchor": "middle", class: "sw-lock" }, g)
+      const lk = T.lockFrame ? el("rect", { x: tx - 11, y: ty - 13, width: 22, height: 18, class: "sw-lockf" }, g)
+        : s.lockOut ? el("text", { x: tx, y: ty + (below ? 17 : -17), "text-anchor": "middle", class: "sw-lock" }, g)
         : el("text", { x: tx + away * (s.id.length > 1 ? 15 : 13), y: ty, "text-anchor": away > 0 ? "start" : "end", class: "sw-lock" }, g);
-      lk.textContent = "🔒";
+      if (!T.lockFrame) lk.textContent = "🔒";
       el("title", {}, g).textContent = "Стрілка " + s.id;
       g.addEventListener("click", (ev) => onObjectClick({ kind: "sw", id: s.id }, ev));
       swEls[s.id] = { t, lk, bl, g };
@@ -501,16 +502,16 @@
     if (ev.ev.action === "depart") {
       const sec = sim.findConsist(ev.ev.consist);
       const exitSig = sec && T.exitSignals[ev.parity][sec];
-      const rOut = exitSig && Object.values(D.routes).find((r) => r.from === exitSig && r.type === "train");
+      const rOut = exitSig && Object.values(D.routes).find((r) => r.from === exitSig && r.type === "train" && (!ev.ev.exitTo || r.to === ev.ev.exitTo));
       return { depart: true, track: sec ? trackName(sec) : null, exitSig, outEnd: rOut && rOut.ends[0] };
     }
     if (!ev.recTrack) return null;
-    const entry = T.entrySignal[ev.parity];
+    const entry = ev.ev.entry || T.entrySignal[ev.parity];
     const rIn = Object.values(D.routes).find((r) => r.from === entry && r.to === ev.recTrack);
     const exM = T.exitSignals[ev.parity] || {};
     const exitSec = Object.keys(exM).find((k) => k === ev.recTrack || k.startsWith(ev.recTrack + "-"));
     const exitSig = exM[exitSec];
-    const rOut = exitSig && Object.values(D.routes).find((r) => r.from === exitSig && r.type === "train");
+    const rOut = exitSig && Object.values(D.routes).find((r) => r.from === exitSig && r.type === "train" && (!ev.ev.exitTo || r.to === ev.ev.exitTo));
     return { track: trackName(ev.recTrack), entry, rIn: rIn && rIn.id, inEnd: rIn && rIn.ends[0], exitSig, outEnd: rOut && rOut.ends[0] };
   }
 

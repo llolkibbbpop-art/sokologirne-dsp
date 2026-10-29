@@ -14,7 +14,7 @@
   const sorted = {}; order.forEach((k) => (sorted[k] = reg[k]));
   Object.keys(reg).forEach((k) => delete reg[k]); Object.assign(reg, sorted);
   let id = null;
-  const m = /(?:^|[#&])st=([a-z]+)/.exec(location.hash || "");
+  const m = /(?:^|[#&])st=([a-z0-9]+)/.exec(location.hash || "");
   if (m) id = m[1];
   if (!id) { try { id = localStorage.getItem("dsp-station"); } catch (e) { /* storage unavailable */ } }
   if (!reg[id]) id = "sokologirne";

@@ -168,7 +168,8 @@
     }
     const routeDef = (rid) => D.routes[rid] || (S.pseudo && S.pseudo[rid]);
     // a single-track line is the approach for arriving trains and the departure line for the others
-    const kindOf = (sec, tr) => { const k = D.sections[sec].kind; return k === "line" ? (tr && tr.parity === T.lineArrivalParity ? "approach" : "exit") : k; };
+    const kindOf = (sec, tr) => { const si = D.sections[sec], k = si.kind; return k === "line" ? (tr && tr.parity === (si.arrParity || T.lineArrivalParity) ? "approach" : "exit") : k; };
+    const entryOf = (tr) => tr.entry || T.entrySignal[tr.parity];
     const stepGoal = (tr) => (tr.shunt ? tr.shunt.plan[tr.shunt.step] || {} : {});
     const endsOf = (goal) => [].concat(goal.end == null ? [] : goal.end);
     // a plan step may name its signal as "@L"/"@R": the signal of that direction facing where the movement stands
@@ -465,7 +466,7 @@
         pref: o.pref, stopSec: o.stopSec || 0, seq: chain.slice(), lim: chain.map(() => 0), req: chain.map(() => null), idx: 0, tIn: 0,
         occ: [chain[0]], len: o.len || blocksFor(o.type, o.num), nextSignal: null, wait: null, waitSec: 0, done: false,
         status: o.type === "shunting" ? "стоїть" : o.atStation ? "состав на колії" : "на підході", shunt: o.shunt || null, loco: !!o.loco, appearedAt: S.time,
-        marks: { appear: S.time }, notBefore: o.notBefore || null, terminate: o.terminate || null, formed: !!o.atStation
+        marks: { appear: S.time }, notBefore: o.notBefore || null, terminate: o.terminate || null, formed: !!o.atStation, entry: o.entry || null, exitTo: o.exitTo || null
       };
       S.sec[chain[0]].occ = tr.id;
       S.trains.push(tr);
@@ -498,8 +499,8 @@
       if (tr.loco) return; // a free locomotive follows whichever shunting route is opened in front of it
       if (tr.shunt) { tr.nextSignal = resolveShuntSig(tr); return; }
       const k = kindOf(h, tr);
-      if (k === "exit") return;
-      if (k === "approach") tr.nextSignal = T.entrySignal[tr.parity];
+      if (k === "exit" || (tr.terminate && k === "track")) return;
+      if (k === "approach") tr.nextSignal = entryOf(tr);
       else tr.nextSignal = (T.exitSignals[tr.parity] || {})[h] || null;
     }
     // signals whose behind-section (or lead track) is where the movement stands
@@ -512,8 +513,8 @@
       if (tr.loco) return null;
       if (tr.shunt) return resolveShuntSig(tr);
       const last = tr.seq[tr.seq.length - 1], k = kindOf(last, tr);
-      if (k === "exit") return null;
-      if (k === "approach") return T.entrySignal[tr.parity];
+      if (k === "exit" || (tr.terminate && k === "track")) return null;
+      if (k === "approach") return entryOf(tr);
       return (T.exitSignals[tr.parity] || {})[last] || null;
     }
     // the automatic dispatcher prepares a route one block in advance, as a DSP does
@@ -539,6 +540,7 @@
       } else {
         cands = Object.values(D.routes).filter((r) => r.from === sig && r.type === "train");
         if (tr.pref && kindOf(lastSec, tr) === "approach") cands = tr.pref.map((p) => cands.find((r) => r.to === p)).filter(Boolean);
+        else if (tr.exitTo) cands = cands.filter((r) => r.to === tr.exitTo);
       }
       let firstErr = null;
       for (const r of cands) {
@@ -687,6 +689,8 @@
           }
         }
         if (!rid) {
+          // a shunting movement that has stopped pulls up fully onto the section where its head is
+          if (tr.type === "shunting" && tr.occ.length > 1) { tr.occ.filter((x) => x !== h).forEach(releaseSection); tr.occ = [h]; }
           const reason = sig ? (S.sig[sig].inv ? "запрошувальний горить, але стрілки не утворюють маршруту" : "чекає відкриття " + sig) : tr.loco ? "чекає маневрового маршруту" : "немає вихідного сигналу з " + h;
           if (tr.wait !== reason) { tr.wait = reason; tr.status = "стоїть: " + reason; }
           tr.waitSec++;
@@ -789,10 +793,11 @@
             continue;
           }
           S.sec[sec].wagons = null;
-          const tr = spawnTrain({ num: ev.ev.train, type: ev.ev.type, parity: ev.parity, start: sec, eventIdx: ev.idx, len: w.len, atStation: true, notBefore: ev.time + ev.delayMin * 60 });
+          const tr = spawnTrain({ num: ev.ev.train, type: ev.ev.type, parity: ev.parity, start: sec, eventIdx: ev.idx, len: w.len, atStation: true, notBefore: ev.time + ev.delayMin * 60, exitTo: ev.ev.exitTo });
           ev.status = "active"; ev.trainId = tr.id; ev.marks = tr.marks; continue;
         }
-        const start = D.signals[T.entrySignal[ev.parity]].approachChain;
+        const entry = ev.ev.entry || T.entrySignal[ev.parity];
+        const start = D.signals[entry].approachChain;
         const lineBusy = start.some((s) => D.sections[s].kind === "line" && (secBusy(S.sec[s]) || S.sec[s].lock));
         if (secBusy(S.sec[start[0]]) || lineBusy) {
           if (ev.status !== "waiting") { ev.status = "waiting"; log("delay", "Поїзд " + ev.ev.train + " затримано на перегоні: блок " + start[0] + " зайнятий"); }
@@ -801,8 +806,10 @@
         let pref = [ev.recTrack, ...((P.typeTracks && P.typeTracks[ev.ev.type]) || P.trackPreference[ev.parity])].filter((v, k, a) => v && a.indexOf(v) === k);
         // trains with passengers to board stop only at platform tracks
         if ((ev.ev.stopMin || ev.ev.action === "arrive") && ["passenger", "electric", "intercity", "suburban"].includes(ev.ev.type)) pref = pref.filter((t) => (P.platformTracks || []).includes(t));
+        // only tracks from which the train can leave towards its line
+        if (ev.ev.exitTo) pref = pref.filter((t) => { const ex = (T.exitSignals[ev.parity] || {})[t]; return ex && Object.values(D.routes).some((r) => r.from === ex && r.type === "train" && r.to === ev.ev.exitTo); });
         const arrive = ev.ev.action === "arrive";
-        const tr = spawnTrain({ num: ev.ev.train, type: ev.ev.type, parity: ev.parity, start, eventIdx: ev.idx, pref, stopSec: arrive ? (P.terminateSec || 90) : (ev.ev.stopMin || 0) * 60,
+        const tr = spawnTrain({ num: ev.ev.train, type: ev.ev.type, parity: ev.parity, start, eventIdx: ev.idx, pref, stopSec: arrive ? (P.terminateSec || 90) : (ev.ev.stopMin || 0) * 60, entry, exitTo: ev.ev.exitTo,
           terminate: arrive ? { consist: ev.ev.consist || ev.ev.train, ready: !!ev.ev.ready } : null });
         ev.status = "active"; ev.trainId = tr.id; ev.marks = tr.marks;
       }

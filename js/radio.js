@@ -76,7 +76,8 @@
       if (!e.trId) return;
       const tr = S.trains.find((t) => t.id === e.trId);
       if (!tr || tr.type === "shunting" || !tr.parity) return;
-      const cfg = RC[tr.parity] || {}, back = cfg.back, fwd = cfg.fwd;
+      const cfg = RC[tr.parity] || {};
+      const back = RC.bySignal ? RC.bySignal[tr.entry] : cfg.back, fwd = RC.byLine ? RC.byLine[tr.exitTo] : cfg.fwd;
       const stops = tr.stopSec > 0 || !!tr.terminate, formed = !!tr.formed;
       const say = (side, text) => { if (side && NB[side]) duty(side, text, tr.num); };
       if (e.evt === "spawn") { if (back && NB[back]) incoming(back, "Поїзд № " + tr.num + " відправився о " + hhmm(e.t - 300) + ".", tr.num); }
