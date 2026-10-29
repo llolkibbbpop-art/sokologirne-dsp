@@ -145,7 +145,7 @@
   Object.keys(TRK).forEach((k) => { const n = k === "8" ? "8" : k; signals.push(sig("Н" + n, "L" + k, "L", "exit"), sig("Ч" + n, "R" + k, "R", "exit")); });
 
   const T = {
-    id: "zaporizhzhia2", station: "Запоріжжя II", planDate: "22.05.2014", shuntToTracks: true, lockFrame: true, lineArrivalParity: "even",
+    id: "zaporizhzhia2", station: "Запоріжжя II", planDate: "22.05.2014", shuntToTracks: true, lockFrame: true, rightParity: "even", lineArrivalParity: "even",
     nodes: N, edges,
     sectionInfo: info,
     switches: SW.map(([id, node, common, plus, minus, label]) => ({ id, node, common, plus, minus, label })),

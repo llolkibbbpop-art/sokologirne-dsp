@@ -39,11 +39,26 @@
   const svg = $("scheme");
   const edgeEls = [], swEls = {}, sigEls = {}, endEls = {};
   let trainLayer, pickLayer, gXO, gXI;
+  // every drawn piece of a switch leg (including bends up to the next joint), and ALL switches it depends on:
+  // a crossover piece belongs to two switches and is "in use" only when both point to it
   const swLegEdge = {};
-  T.switches.forEach((s) => {
-    swLegEdge[s.node + "|" + s.plus] = swLegEdge[s.plus + "|" + s.node] = { sw: s.id, leg: "+", node: s.node };
-    swLegEdge[s.node + "|" + s.minus] = swLegEdge[s.minus + "|" + s.node] = { sw: s.id, leg: "-", node: s.node };
-  });
+  (function () {
+    const secAt = {}, adjN = {}, swAtN = {};
+    T.edges.forEach(([a, b, sec]) => { secAt[a + "|" + b] = secAt[b + "|" + a] = sec; (adjN[a] = adjN[a] || []).push(b); (adjN[b] = adjN[b] || []).push(a); });
+    T.switches.forEach((sw) => (swAtN[sw.node] = sw));
+    const add = (a, b, v) => { [a + "|" + b, b + "|" + a].forEach((k) => (swLegEdge[k] = swLegEdge[k] || []).push(v)); };
+    T.switches.forEach((sw) => [["+", sw.plus], ["-", sw.minus]].forEach(([leg, n0]) => {
+      const sec = secAt[sw.node + "|" + n0], v = { sw: sw.id, leg };
+      let prev = sw.node, cur = n0; add(prev, cur, v);
+      // follow plain bend nodes that stay in the same section
+      for (let i = 0; i < 6 && !swAtN[cur] && (adjN[cur] || []).length === 2; i++) {
+        const nx = adjN[cur].find((x) => x !== prev);
+        if (!nx || secAt[cur + "|" + nx] !== sec) break;
+        add(cur, nx, v); prev = cur; cur = nx;
+      }
+    }));
+  })();
+  const legOff = (legs, S) => !!legs && legs.some((l) => { const sw = S.sw[l.sw]; return sw.moving ? sw.moving.to !== l.leg : !sw.lost && sw.pos !== l.leg; });
 
   // display points of an edge, including bends from T.displayVia
   function edgePts(a, b) {
@@ -151,7 +166,8 @@
   }
 
   function secMid(secId) {
-    const es = D.sections[secId].edges;
+    const all = D.sections[secId].edges, on = all.filter((e) => !legOff(swLegEdge[e.a + "|" + e.b], sim.S));
+    const es = on.length ? on : all;
     let best = es[0], bl = -1;
     es.forEach((e) => { const [x1, y1] = pt(e.a), [x2, y2] = pt(e.b); const l = Math.hypot(x2 - x1, y2 - y1) + (y1 === y2 ? 300 : 0); if (l > bl) { bl = l; best = e; } });
     const [x1, y1] = pt(best.a), [x2, y2] = pt(best.b);
@@ -175,8 +191,9 @@
       if (st.artUntil != null) cls.push("blink");
       if (pickEnds && pickEnds.secs.has(e.sec)) cls.push("target");
       let off = false;
-      if (e.leg) { const sw = S.sw[e.leg.sw]; off = !sw.moving && !sw.lost && sw.pos !== e.leg.leg; if (sw.lost) cls.push("lost"); }
-      if (off) cls.push("off");
+      if (e.leg) { off = legOff(e.leg, S); if (e.leg.some((l) => S.sw[l.sw].lost)) cls.push("lost"); }
+      // the leg the switch does not point to shows nothing: no route colour, no occupancy
+      if (off) { cls.length = 0; cls.push("off"); if (e.leg.some((l) => S.sw[l.sw].lost)) cls.push("lost"); }
       if (ui.sel && ui.sel.kind === "sec" && ui.sel.id === e.sec) cls.push("sel");
       const c = cls.join(" ");
       if (e.c !== c) { e.o.setAttribute("class", "tube-o " + c); e.i.setAttribute("class", "tube-i " + c); e.c = c; }
@@ -215,7 +232,8 @@
       const ev = tr.eventIdx != null ? S.events[tr.eventIdx] : null;
       const late = ev ? sim.lateMin(ev) : 0;
       const g = el("g", { class: "train " + tr.type + (late > 0 ? " late" : ""), transform: `translate(${x},${y})` }, trainLayer);
-      const label = (tr.parity === "even" ? "◄" : "") + tr.num + (tr.parity === "odd" ? "►" : "") + (late > 0 ? " +" + late : "");
+      const right = tr.parity && tr.parity === (T.rightParity || "odd"), left = tr.parity && !right;
+      const label = (left ? "◄" : "") + tr.num + (right ? "►" : "") + (late > 0 ? " +" + late : "");
       const w = 12 + label.length * 7.4;
       el("rect", { x: -w / 2, y: -9, width: w, height: 17 }, g);
       el("text", { x: 0, y: 4, "text-anchor": "middle" }, g).textContent = label;
@@ -915,5 +933,5 @@
   buildSvg();
   refresh(true);
   requestAnimationFrame(frame);
-  window.__sim = sim; // for tests
+  window.__sim = sim; window.__edges = edgeEls; window.__refresh = () => refresh(); // for tests
 })();
