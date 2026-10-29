@@ -269,7 +269,7 @@ footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 90ch
   .rku-route .rbtns button { flex: 1; padding: 9px; }
   .btns button { padding: 9px 12px; }
   .tbl-wrap { max-height: 360px; }
-  th:nth-child(4), td:nth-child(4) { display: none; } /* direction column: arrow on the train number is enough */
+  #evTable th:nth-child(2), #evTable td:nth-child(2) { display: none; } /* date: same for the whole day */
   .form { grid-template-columns: minmax(0, 1fr); }
   .modal { padding: 14px; }
 }
@@ -373,3 +373,109 @@ body.grey-console .scheme-wrap { border-color: #4a4a4a; }
 /* ---------- console-only mode ---------- */
 body.console-only .banner, body.console-only .tabs, body.console-only .graph-card, body.console-only .cols, body.console-only footer, body.console-only .settings { display: none !important; }
 body.console-only #viewHist { display: none !important; }
+
+/* =====================================================================
+   v9: square АРМ look, header across the full width, Excel-like sheets,
+   classic grey confirmation window, analog clock
+   ===================================================================== */
+*, *::before, *::after { border-radius: 0 !important; }
+
+.top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px 18px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; min-width: 0; }
+.toolbar > button, .drop > button { height: 34px; }
+.ico { width: 16px; height: 16px; fill: currentColor; vertical-align: -3px; }
+.help-btn { width: 34px; padding: 0; }
+.drop { position: relative; }
+.drop-panel { position: absolute; top: calc(100% + 4px); left: 0; z-index: 70; min-width: 270px; display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; background: var(--panel); border: 1px solid var(--accent); box-shadow: 0 10px 28px rgba(0,0,0,.55); }
+.drop-panel.right { left: auto; right: 0; }
+.drop-panel label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--fg); }
+.dp-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dp-col { display: flex; flex-direction: column; gap: 8px; padding-left: 10px; border-left: 2px solid var(--line); }
+
+/* clock: white frame, white dial with ticks only, digital time and date */
+.clockbox { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px; border: 2px solid #f2f2f2; background: #000; }
+#aclock { width: 52px; height: 52px; display: block; }
+.ac-face { fill: #fff; stroke: #fff; }
+.ac-hr { stroke: #111; stroke-width: 3; }
+.ac-min { stroke: #444; stroke-width: 1.2; }
+.ac-hh { stroke: #111; stroke-width: 4.5; }
+.ac-mh { stroke: #111; stroke-width: 3; }
+.ac-sh { stroke: #d01010; stroke-width: 1.4; }
+.ac-pin { fill: #111; }
+.clk-text { display: flex; flex-direction: column; align-items: flex-start; }
+.clk-text .clock { color: #fff; font: 500 28px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.clk-text small { color: #e6e6e6; font: 500 12px var(--font-mono); margin-top: 3px; }
+
+/* Excel-like white sheet (timetable, radio, ДУ-47) */
+.tbl-wrap.sheet { background: #fff; border: 1px solid #8f8f8f; }
+.sheet table, table.sheet { background: #fff; color: #111; font: 12.5px/1.3 var(--font-ui); font-variant-numeric: tabular-nums; border-collapse: collapse; width: 100%; }
+.sheet th, table.sheet th { position: sticky; top: 0; z-index: 1; background: #e8e8e8; color: #222; font-weight: 600; border: 1px solid #b9b9b9; padding: 3px 6px; text-align: left; }
+.sheet td, table.sheet td { border: 1px solid #d6d6d6; padding: 2px 6px; color: #111; }
+.sheet tr.ev:hover td { background: #eef4ff; }
+.sheet tr.ev.sel td { background: #cfe1ff; }
+.sheet tr.ev.done td { color: #8a8a8a; }
+.sheet tr.ev.act td { background: #e6f7e9; }
+.sheet tr.ev.wait td { background: #fff3d1; }
+.sheet tr.ev.cfg td { color: #7a3fd0; }
+.sheet tr.ev.late td.tm { color: #c00000; font-weight: 700; }
+.sheet tr.ev.sel.act td, .sheet tr.ev.sel.wait td { background: #cfe1ff; }
+.sheet-hint { margin: 6px 0 0; }
+
+.radio-live, .radio-journal { background: #fff; border: 1px solid #8f8f8f; }
+table.rsheet td { white-space: normal; vertical-align: top; }
+table.rsheet td.tm { white-space: nowrap; font-family: var(--font-mono); }
+table.rsheet .dt { color: #777; font-size: 10.5px; }
+table.rsheet td.who { white-space: nowrap; color: #333; }
+table.rsheet tr.me td.who { color: #0a4fa8; }
+table.rsheet tr.drv td.who { color: #8a6200; }
+table.rsheet tr.duty td.who { color: #b35a00; font-weight: 600; }
+table.rsheet tr.pending td { background: #fff8dc; }
+table.rsheet tr.overdue td { background: #ffe1e1; }
+table.rsheet td.act { white-space: nowrap; }
+table.rsheet td.empty { color: #777; font-style: italic; text-align: center; padding: 10px; }
+table.sheet button { background: #e6e6e6; color: #111; border: 1px solid #8a8a8a; padding: 1px 8px; font-size: 12px; margin: 1px 2px 1px 0; }
+table.sheet button:hover { background: #d6e6ff; border-color: #3a6fc4; }
+.jr-cap { margin: 0; padding: 4px 6px; background: #f2f2f2; color: #222; font-size: 12px; border-bottom: 1px solid #c6c6c6; }
+.radio-win { border-color: #9a9a9a; }
+
+/* classic grey confirmation window («Підтвердіть виконання команди») */
+.modal.win { padding: 0; width: min(470px, 100%); background: #d4d0c8; color: #000; border: 1px solid; border-color: #fff #404040 #404040 #fff;
+  box-shadow: inset -1px -1px #808080, inset 1px 1px #e8e8e8, 0 12px 34px rgba(0,0,0,.6); font-family: "Segoe UI", Tahoma, var(--font-ui); }
+.win-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 3px 3px 8px; background: linear-gradient(90deg, #6e6e6e, #b4b4b4); color: #fff; font: 700 13px "Segoe UI", Tahoma, var(--font-ui); user-select: none; }
+.win-title button { background: #d4d0c8; color: #000; border: 1px solid; border-color: #fff #404040 #404040 #fff; padding: 0 6px; font: 700 11px/16px var(--font-ui); }
+.win-body { padding: 14px 18px 14px; }
+.m-obj { text-align: center; font: 700 22px var(--font-mono); margin: 2px 0 10px; color: #000; }
+.m-cmd { margin: 0 0 12px; font-size: 14px; color: #000; }
+.m-red { color: #c00000; }
+.m-code { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 14px; }
+.m-code b { font: 700 16px var(--font-mono); }
+.m-code input { width: 74px; background: #fff; color: #000; border: 1px solid; border-color: #404040 #fff #fff #404040; font: 700 16px var(--font-mono); padding: 2px 6px; }
+.m-btns { display: flex; justify-content: center; gap: 16px; }
+.m-btns button { min-width: 100px; background: #d4d0c8; color: #000; border: 1px solid; border-color: #fff #404040 #404040 #fff; box-shadow: 1px 1px 0 #000; padding: 4px 12px; }
+.m-btns button:active { border-color: #404040 #fff #fff #404040; box-shadow: none; }
+.m-btns button:focus-visible { outline: 1px dotted #000; outline-offset: -5px; }
+
+/* train info popover (opened from the timetable) */
+.info-pop { width: 360px; }
+.info-pop input { width: 80px; }
+
+/* console-only: the plan fills ~70 % of the screen height (rebuilt with a vertical stretch) */
+body.console-only .scheme-wrap svg { min-width: 0; }
+
+@media (max-width: 720px) {
+  .top { grid-template-columns: minmax(0, 1fr) auto; }
+  .clockbox { grid-column: 2; grid-row: 1; padding: 3px 8px 3px 4px; gap: 6px; }
+  .toolbar { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+  #aclock { width: 40px; height: 40px; }
+  .clk-text .clock { font-size: 20px; }
+  .clk-text small { font-size: 11px; }
+  .drop { position: static; }
+  .drop-panel, .drop-panel.right { position: fixed; left: 8px; right: 8px; top: auto; min-width: 0; margin-top: 4px; }
+  .info-pop { width: auto; }
+}
+table.rsheet td.tm, table.rsheet th:first-child { width: 72px; }
+table.rsheet td.act { width: 1%; }
+table.rsheet td.who { width: 1%; }
+.radio-win { width: min(640px, calc(100vw - 32px)); height: min(520px, 74vh); }
+.win-title .hint { color: #f0f0f0; }

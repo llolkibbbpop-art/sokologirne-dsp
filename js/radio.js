@@ -116,29 +116,31 @@
       if ($("radio").hidden) return;
       const live = $("radioLive"), jr = $("radioJournal");
       live.hidden = tab !== "live"; jr.hidden = tab === "live";
+      const date = (t) => { const d = new Date(Date.UTC(2014, 9, 28) + (sim().S.day - 1) * 86400000); return String(d.getUTCDate()).padStart(2, "0") + "." + String(d.getUTCMonth() + 1).padStart(2, "0") + "." + d.getUTCFullYear(); };
+      const tcell = (t) => `<td class="tm">${window.SimEngine.fmt(t).slice(0, 5)}<br><span class="dt">${date(t)}</span></td>`;
       if (tab === "live") {
         const rows = R.msgs.slice(-60).map((m) => {
-          const t = window.SimEngine.fmt(m.t).slice(0, 5);
           let who, body = esc(m.text), btns = "";
           if (m.kind === "in") { who = "ст. " + NB[m.side].name; body = esc(m.head) + " " + body; }
           else if (m.kind === "nb") who = "ст. " + NB[m.side].name;
-          else if (m.kind === "me") who = "Ви (ДСП)";
+          else if (m.kind === "me") who = "Сокологірне (ви)";
           else if (m.kind === "drv") who = "Машиніст";
           else if (m.kind === "duty") { who = "Завдання"; body = "Передати на ст. " + esc(NB[m.side].name) + ": «" + body + "»"; }
           if (m.need === "repeat") btns = `<button data-id="${m.id}" data-a="ok">Повторити текст</button>`;
           if (m.need === "send") btns = `<button data-id="${m.id}" data-a="ok">Передати</button>`;
           if (m.need === "confirm") btns = `<button data-id="${m.id}" data-a="ok">Вірно</button>`;
           if (m.need === "driver") btns = `<button data-id="${m.id}" data-a="ok">Маршрут готую</button><button data-id="${m.id}" data-a="wait">Чекайте</button>`;
-          return `<div class="rmsg ${m.kind}${m.need ? " pending" : ""}${m.overdue && m.need ? " overdue" : ""}"><span class="rt">${t}</span><span class="rw">${who}</span><span class="rb">${body}</span>${btns ? `<span class="ra">${btns}</span>` : ""}</div>`;
+          return `<tr class="${m.kind}${m.need ? " pending" : ""}${m.overdue && m.need ? " overdue" : ""}">${tcell(m.t)}<td class="who">${esc(who)}</td><td class="txt">${body}</td><td class="act">${btns}</td></tr>`;
         }).join("");
-        const html = rows || `<p class="hint">Тиша в ефірі. Коли сусідня станція відправить поїзд до вас, тут з'явиться телефонограма. Після прибуття, відправлення чи проходу поїзда — завдання передати телефонограму сусідам.</p>`;
+        const html = `<table class="sheet rsheet"><thead><tr><th>Час / дата</th><th>Від ст.</th><th>Зміст</th><th>Дія</th></tr></thead><tbody>${rows || `<tr><td colspan="4" class="empty">Тиша в ефірі. Коли сусідня станція відправить поїзд до вас, тут з'явиться телефонограма.</td></tr>`}</tbody></table>`;
         if (live.__h !== html) { live.innerHTML = html; live.__h = html; live.scrollTop = live.scrollHeight; }
       } else {
         const side = tab === "jy" ? "Y" : "P";
         const list = R.journal[side];
-        jr.innerHTML = `<p class="hint">Журнал поїзних телефонограм ф. ДУ-47 · перегін Сокологірне — ${NB[side].name}</p>` + (list.length
-          ? `<table><thead><tr><th>Час</th><th>№</th><th>Вид</th><th>Текст</th><th>Підписи</th></tr></thead><tbody>${list.map((j) => `<tr><td>${window.SimEngine.fmt(j.t).slice(0, 5)}</td><td>${j.no}</td><td>${j.dir}</td><td>${esc(j.text)}</td><td>${esc(j.who)}</td></tr>`).join("")}</tbody></table>`
-          : `<p class="hint">Записів ще немає.</p>`);
+        jr.innerHTML = `<p class="jr-cap">Журнал поїзних телефонограм ф. ДУ-47 · перегін Сокологірне — ${NB[side].name}</p>
+          <table class="sheet rsheet"><thead><tr><th>Час / дата</th><th>№</th><th>Від ст.</th><th>Зміст</th><th>Підписи</th></tr></thead><tbody>${list.length
+          ? list.map((j) => `<tr>${tcell(j.t)}<td>${j.no}</td><td class="who">${j.dir === "вхідна" ? esc(NB[side].name) : "Сокологірне"}</td><td class="txt">${esc(j.text)}</td><td class="who">${esc(j.who)}</td></tr>`).join("")
+          : `<tr><td colspan="5" class="empty">Записів ще немає.</td></tr>`}</tbody></table>`;
       }
     }
     $("radioLive").addEventListener("click", (e) => { const b = e.target.closest("button[data-id]"); if (b) act(+b.dataset.id, b.dataset.a); });

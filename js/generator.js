@@ -24,7 +24,16 @@
   const hm = (m) => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
 
   const DIRS = { odd: "Dzhankoi", even: "Melitopol" };
-  const SPEED_RANK = { intercity: 4, passenger: 3, electric: 2, freight: 1 };
+  const SPEED_RANK = { intercity: 4, passenger: 3, electric: 2, reserve: 2, freight: 1, household: 1 };
+  // origin / destination stations (model; odd trains run towards Джанкой, even towards Мелітополь)
+  const ENDS = {
+    passenger: { a: ["Київ", "Харків", "Дніпропетровськ", "Запоріжжя-1", "Львів"], b: ["Сімферополь", "Севастополь", "Євпаторія", "Феодосія"] },
+    intercity: { a: ["Київ"], b: ["Сімферополь"] },
+    electric:  { a: ["Мелітополь", "Якимівка"], b: ["Новоолексіївка", "Джанкой"] },
+    freight:   { a: ["Мелітополь", "Запоріжжя-Ліве", "Пологи", "Федорівка"], b: ["Джанкой", "Новоолексіївка", "Херсон"] },
+    household: { a: ["Мелітополь", "Якимівка"], b: ["Новоолексіївка", "Партизани"] },
+    reserve:   { a: ["Мелітополь"], b: ["Джанкой", "Новоолексіївка"] }
+  };
   const HEADWAY = 6;   // min between trains of one direction
   const LEVELS = { low: 0.6, medium: 1, high: 1.5 };
 
@@ -54,6 +63,10 @@
       // freight
       const nF = Math.max(3, Math.round(9 * k));
       for (let i = 0; i < nF; i++) list.push({ m: ri(0, 1439), type: "freight", par, n: num(2001, 798, par) });
+      // reserve locomotives (light engine, no wagons) and a household (track works) train
+      const nR = Math.max(1, Math.round(2 * k));
+      for (let i = 0; i < nR; i++) list.push({ m: ri(0, 1439), type: "reserve", par, n: num(4801, 98, par) });
+      if (r() < 0.6 * k) list.push({ m: ri(480, 1080), type: "household", par, n: num(9601, 98, par) });
     });
     // side tracks are shared by both directions: keep a busy list per track
     const busy = { "3П": [], "4П": [], "6П": [] };
@@ -101,6 +114,12 @@
         t.note = "зупинка " + t.stop + " хв біля платформи (колія " + (t.side ? "3" : t.par === "odd" ? "I" : "II") + ")";
       }
       if (t.type === "passenger" && r() < 0.3) { t.stop = 2; t.note = "зупинка 2 хв (посадка/висадка), головна колія"; }
+      if (t.type === "household") {
+        const stop = ri(20, 45), trk = SIDE[t.par].find((x) => free(x, t.m - 3, t.m + stop + 6));
+        if (trk) { busy[trk].push([t.m - 3, t.m + stop + 6]); t.side = trk; t.stop = stop; t.note = "господарський: стоянка " + stop + " хв на колії " + trk.replace("П", "") + " (колійні роботи)"; }
+      }
+      const E = ENDS[t.type];
+      if (E) { const a = E.a[ri(0, E.a.length - 1)], b = E.b[ri(0, E.b.length - 1)]; t.from = t.par === "odd" ? a : b; t.to = t.par === "odd" ? b : a; }
     });
     list.forEach((t) => { if (t.m > 1435) t.m = 1435; });
     list.sort((a, b) => a.m - b.m);
@@ -108,8 +127,8 @@
       const main = t.par === "odd" ? "IП" : "IIП";
       const e = {
         time: hm(t.m), train: t.n, type: t.type, direction: DIRS[t.par],
-        action: t.stop ? (t.type === "freight" && !t.note.startsWith("обгін") ? "stand" : t.type === "freight" ? "overtake" : "stop") : "pass_station",
-        timeStatus: "generated", recTrack: t.side || main, stopMin: t.stop || 0
+        action: t.stop ? ((t.type === "freight" || t.type === "household") && !t.note.startsWith("обгін") ? "stand" : t.type === "freight" ? "overtake" : "stop") : "pass_station",
+        timeStatus: "generated", recTrack: t.side || main, stopMin: t.stop || 0, from: t.from, to: t.to
       };
       if (t.type === "intercity") e.note = "Інтерсіті: лише головна колія, без зупинки, пріоритет";
       if (t.note) e.note = t.note;

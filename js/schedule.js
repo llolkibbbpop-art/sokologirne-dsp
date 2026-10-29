@@ -227,18 +227,18 @@ window.MODEL_PARAMS = {
   directionLabel: { "Dzhankoi":"на Джанкой (непар.)", "Melitopol":"на Мелітополь (пар.)", "station":"по станції" },
   // preferred receiving tracks for through trains (main track first, then side track)
   trackPreference: { odd:["IП","3П"], even:["IIП","4П"] },
-  appearLeadMin: { passenger:4, freight:6, shunting:1, electric:5, intercity:3 }, // minutes before event time the train appears on approach (model)
-  speedKmh: { passenger:60, freight:40, shunting:15, test:50, electric:55, intercity:90 },
+  appearLeadMin: { passenger:4, freight:6, shunting:1, electric:5, intercity:3, household:7, reserve:4 }, // minutes before event time the train appears on approach (model)
+  speedKmh: { passenger:60, freight:40, shunting:15, test:50, electric:55, intercity:90, household:35, reserve:60 },
   minSectionSec: 8,
   tailSec: 10,                 // time the train tail keeps the previous section occupied
   cancelDelaySec: 180,         // train route cancelled with occupied approach: 3 min (handbook, табл. 2.21)
   cancelDelayShuntSec: 60,     // shunting route: 1 min
   // Recommended receiving track per train type and parity (model choice, shown to the DSP as a hint)
-  recommendedTrack: { passenger:{ odd:"IП", even:"IIП" }, freight:{ odd:"3П", even:"4П" }, test:{ odd:"IП", even:"IIП" }, electric:{ odd:"IП", even:"IIП" }, intercity:{ odd:"IП", even:"IIП" } },
+  recommendedTrack: { passenger:{ odd:"IП", even:"IIП" }, freight:{ odd:"3П", even:"4П" }, test:{ odd:"IП", even:"IIП" }, electric:{ odd:"IП", even:"IIП" }, intercity:{ odd:"IП", even:"IIП" }, household:{ odd:"3П", even:"4П" }, reserve:{ odd:"IП", even:"IIП" } },
   platformTracks: ["IП", "IIП", "3П"],   // island platform between I and II, side platform at 3 (from the plan)
   mainTracks: ["IП", "IIП"],
   // Train length in blocks (deterministic "random" from the train number): [min, max]
-  trainBlocks: { passenger:[2,3], freight:[3,5], test:[2,3], shunting:[1,1], electric:[2,2], intercity:[2,3] },         // delayed route release when approach is occupied (model)
+  trainBlocks: { passenger:[2,3], freight:[3,5], test:[2,3], shunting:[1,1], electric:[2,2], intercity:[2,3], household:[2,2], reserve:[1,1] },         // delayed route release when approach is occupied (model)
   artReleaseSec: 180,         // artificial release 3–4 min (handbook p.144)
   shuntWaitSec: 300,
   shuntingEnabledByDefault: true,

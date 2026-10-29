@@ -383,7 +383,7 @@
 
     // ---------------------------------------------------------------- trains
     function trainLabel(id) { const t = S.trains.find((x) => x.id === id); return t ? (t.type === "shunting" ? "маневровий " : "поїзд ") + t.num : "рухомий склад"; }
-    const typeName = (t) => ({ passenger: "пасажирський", freight: "вантажний", shunting: "маневровий", test: "тестовий", electric: "електропоїзд", intercity: "Інтерсіті" }[t] || t);
+    const typeName = (t) => ({ passenger: "пасажирський", freight: "товарний", shunting: "маневровий", test: "тестовий", electric: "електропоїзд", intercity: "Інтерсіті+", household: "господарський", reserve: "резервний локомотив" }[t] || t);
 
     function secDur(i, tr) {
       const sec = D.sections[tr.seq[i]];
@@ -676,7 +676,9 @@
           if (ev.status !== "waiting") { ev.status = "waiting"; log("delay", "Поїзд " + ev.ev.train + " затримано на перегоні: блок " + start[0] + " зайнятий"); }
           continue;
         }
-        const pref = [ev.recTrack, ...P.trackPreference[ev.parity]].filter((v, k, a) => v && a.indexOf(v) === k);
+        let pref = [ev.recTrack, ...P.trackPreference[ev.parity]].filter((v, k, a) => v && a.indexOf(v) === k);
+        // trains with passengers to board stop only at platform tracks
+        if (ev.ev.stopMin && ["passenger", "electric", "intercity"].includes(ev.ev.type)) pref = pref.filter((t) => (P.platformTracks || []).includes(t));
         const tr = spawnTrain({ num: ev.ev.train, type: ev.ev.type, parity: ev.parity, start, eventIdx: ev.idx, pref, stopSec: (ev.ev.stopMin || 0) * 60 });
         ev.status = "active"; ev.trainId = tr.id; ev.marks = tr.marks;
       }

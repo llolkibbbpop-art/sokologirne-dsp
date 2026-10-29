@@ -13,33 +13,37 @@
 <body>
 <header class="top">
   <div class="brand"><h1>АРМ ДСП · Сокологірне</h1><small>Навчальна модель МПЦ · план від 28.10.2014</small></div>
-  <div class="clock-box"><span class="clock" id="clock">00:00:00</span><small id="dateLine">Доба 1 · умовна дата 28.10.2014</small></div>
-  <div class="ctrl">
-    <button id="btnPlay" class="on">⏸ Пауза</button>
-    <span class="seg" id="speedSeg"><button data-s="1" class="on">x1</button><button data-s="2">x2</button><button data-s="5">x5</button><button data-s="10">x10</button><button data-s="60">x60</button></span>
-    <button id="btnSkip" title="Прокрутити час до появи наступного поїзда">⏭ До події</button>
-    <button id="btnReset" class="danger">↺ Скинути добу</button>
-    <button id="btnConsole" title="Залишити тільки пульт (згорнути графік, таблиці, журнал)">▣ Лише пульт</button>
-    <button id="btnRadio" title="Радіо і телефонограми (ІРП, розділ 9)">📻 Радіо <b id="radioBadge"></b></button>
-    <button id="btnHelp" class="help-btn" title="Як приймати і відправляти поїзди" aria-label="Довідка">?</button>
+  <nav class="toolbar" aria-label="Панель інструментів">
+    <div class="drop"><button id="btnSet" aria-expanded="false">⚙ Налаштування</button>
+      <div class="drop-panel" id="settings" hidden>
+        <label title="Якщо увімкнено, маршрути задає система замість вас"><input type="checkbox" id="chkAuto"> Автодиспетчер</label>
+        <label title="Код пильності вписується в поле автоматично"><input type="checkbox" id="chkCode" checked> Підказувати код</label>
+        <label title="Короткий звук, коли поїзд вступає на ділянку наближення"><input type="checkbox" id="chkSound" checked> Звук наближення</label>
+        <label><input type="checkbox" id="chkShunt" checked> Маневрові роботи</label>
+        <label>Графік <select id="selSrc"><option value="gen" selected>генератор</option><option value="json">із завдання (JSON)</option></select></label>
+        <div id="genCtl" class="dp-col">
+          <label>Рух <select id="selLevel"><option value="low">рідкий</option><option value="medium" selected>середній</option><option value="high">інтенсивний</option></select></label>
+          <label title="Однаковий номер варіанта дає однаковий графік">Варіант <input id="inSeed" type="number" min="1" value="2014" style="width:90px"></label>
+          <div class="dp-row"><button id="btnGen" type="button">Застосувати</button><button id="btnNewSeed" type="button" title="Випадковий новий графік">Новий варіант</button></div>
+        </div>
+        <label>Після 23:59 <select id="selEnd"><option value="newday">новий день</option><option value="stop">зупинка</option></select></label>
+      </div>
+    </div>
+    <button id="btnRadio" title="Радіо і поїзні телефонограми (ІРП, розділ 9)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg> Радіо <b id="radioBadge"></b></button>
+    <button id="btnConsole" title="Залишити тільки пульт і розтягнути план">▣ Лише пульт</button>
+    <div class="drop"><button id="btnTime" aria-expanded="false">⏱ Час</button>
+      <div class="drop-panel right" id="timePanel" hidden>
+        <div class="dp-row"><button id="btnPlay" class="on">⏸ Пауза</button>
+          <span class="seg" id="speedSeg"><button data-s="1" class="on">x1</button><button data-s="2">x2</button><button data-s="5">x5</button><button data-s="10">x10</button><button data-s="60">x60</button></span></div>
+        <div class="dp-row"><button id="btnSkip" title="Прокрутити час до появи наступного поїзда">⏭ До події</button><button id="btnReset" class="danger">↺ Скинути добу</button></div>
+      </div>
+    </div>
+    <button id="btnHelp" class="help-btn" title="Довідка, легенда, вигляд" aria-label="Довідка">?</button>
+  </nav>
+  <div class="clockbox" aria-label="Модельний час">
+    <svg id="aclock" viewBox="-50 -50 100 100" aria-hidden="true"></svg>
+    <div class="clk-text"><span class="clock" id="clock">00:00.00</span><small id="dateLine">28.10.2014</small></div>
   </div>
-  <details class="settings" id="settings" open>
-  <summary>Налаштування</summary>
-  <div class="ctrl">
-    <label title="Якщо увімкнено, маршрути задає система замість вас"><input type="checkbox" id="chkAuto"> Автодиспетчер</label>
-    <label title="Код пильності вписується в поле автоматично"><input type="checkbox" id="chkCode" checked> Підказувати код</label>
-    <label title="Короткий звук, коли поїзд вступає на ділянку наближення"><input type="checkbox" id="chkSound" checked> Звук наближення</label>
-    <label><input type="checkbox" id="chkShunt" checked> Маневрові роботи</label>
-    <label>Графік <select id="selSrc"><option value="gen" selected>генератор</option><option value="json">із завдання (JSON)</option></select></label>
-    <span class="ctrl" id="genCtl">
-      <label>Рух <select id="selLevel"><option value="low">рідкий</option><option value="medium" selected>середній</option><option value="high">інтенсивний</option></select></label>
-      <label title="Однаковий номер варіанта дає однаковий графік">Варіант <input id="inSeed" type="number" min="1" value="2014" style="width:80px"></label>
-      <button id="btnGen" type="button">Застосувати</button>
-      <button id="btnNewSeed" type="button" title="Випадковий новий графік">🎲 Новий</button>
-    </span>
-    <label>Після 23:59 <select id="selEnd"><option value="newday">новий день</option><option value="stop">зупинка</option></select></label>
-  </div>
-  </details>
 </header>
 
 <div class="banner">Навчальна симуляція. Не підключена до реальної залізничної інфраструктури. Час подій у графіку вигаданий, це не архівний графік руху станції.</div>
@@ -71,7 +75,7 @@
       </div></div>
       <div class="igrp"><span class="igcap">МІСЦЕ · РЕЖИМ</span><div class="irow"><span class="lamp-box on">АРМ ДСП</span><span class="lamp-box" id="indAuto">РУЧНЕ</span></div></div>
       <div class="igrp"><span class="igcap">ЛІЧИЛЬНИКИ</span><span class="counters" title="Запрошувальний / допоміжне переведення / штучне розмикання">ЗС <b id="cntInv">0</b> · ДП <b id="cntAux">0</b> · ШР <b id="cntArt">0</b></span></div>
-      <div class="igrp"><span class="igcap">ФОН</span><span class="seg" id="themeSeg"><button data-t="black" class="on">чорний</button><button data-t="grey">сірий</button></span></div>
+
       <div class="igrp zoom"><span class="igcap">МАСШТАБ</span><span class="seg" id="zoomSeg"><button data-z="-1" aria-label="Зменшити">−</button><button data-z="0" title="Вся станція">▭</button><button data-z="1" aria-label="Збільшити">+</button></span></div>
     </div>
     <svg id="scheme" viewBox="-165 48 2895 316" aria-label="Нитковий план станції Сокологірне"></svg>
@@ -96,42 +100,10 @@
         <h2>Найближча подія</h2>
         <div id="nextBox" class="hint">—</div>
       </div>
-      <div class="card">
-        <h2>Модельний графік на добу <span class="hint" id="evDay"></span></h2>
-        <div class="tbl-wrap"><table id="evTable"><thead><tr><th>Час</th><th>Поїзд</th><th>Тип</th><th>Напрямок</th><th title="Рекомендована колія прийому (модель)">Колія</th><th>Статус</th><th title="Затримка, хв">Затр.</th></tr></thead><tbody></tbody></table></div>
-      </div>
-    </div>
-    <div class="col">
-      <div class="card rku-card" id="rkuCard"><h2>Панель об'єкта <button class="sheet-close" id="rkuClose" aria-label="Закрити панель">✕</button></h2><div id="rku" class="hint">Нічого не вибрано.</div></div>
-      <div class="card"><h2>Поїзд</h2><div id="trainBox" class="hint">Виберіть поїзд на схемі або в графіку.</div></div>
-      <div class="card">
-        <h2>Тестовий поїзд</h2>
-        <form id="testForm" class="form">
-          <label>Номер<input id="tNum" value="Т-1"></label>
-          <label>Напрямок<select id="tPar"><option value="odd">Непарний (на Партизани)</option><option value="even">Парний (на Якимівку)</option></select></label>
-          <label>Колія<select id="tTrack"></select></label>
-          <label>Через, хв<input id="tIn" type="number" min="0" value="0"></label>
-          <label>Стоянка, хв<input id="tStop" type="number" min="0" value="0"></label>
-          <label>&nbsp;<button type="submit">Створити</button></label>
-        </form>
-      </div>
-      <div class="card">
-        <h2>Легенда</h2>
-        <div class="legend">
-          <div><span class="tube"></span>Ділянка вільна</div>
-          <div><span class="tube setting"></span>Бере участь у маршруті (набір, стрілки переводяться)</div>
-          <div><span class="tube lk-train"></span>Замкнена в поїзному маршруті</div>
-          <div><span class="tube lk-shunt"></span>Замкнена в маневровому маршруті</div>
-          <div><span class="tube occ"></span>Зайнята</div>
-          <div><span class="tube blocked"></span>Заблокована</div>
-          <div><span class="dot" style="background:#ff2b2b"></span><span class="dot" style="background:#2fe05a"></span>Поїзний світлофор: закритий / відкритий</div>
-          <div><span class="dot sm" style="background:#2f6bff"></span><span class="dot sm" style="background:#fff"></span>Маневровий: синій / білий</div>
-          <div><span class="dot" style="background:#ff2b2b"></span><span class="dot sm" style="background:#fff"></span>Запрошувальний (червоний + білий)</div>
-          <div><b class="swnum">17</b>Жовтий номер: стрілка в мінусі; блимає — переводиться; червоний — немає контролю</div>
-          <div><span class="pill p-planned">модельний час</span>Вигаданий час графіка</div>
-          <div><span class="pill p-late">запізн. 5 хв</span>Поїзд запізнюється</div>
-          <div><span class="pill p-hist">план / джерело</span>Підтверджена історична інформація</div>
-        </div>
+      <div class="card sheet-card">
+        <h2>Розклад на добу <span class="hint" id="evDay"></span></h2>
+        <div class="tbl-wrap sheet"><table id="evTable"><thead><tr><th>№ поїзда</th><th>Дата</th><th>Час</th><th>Тип</th><th>Від станції</th><th>До станції</th></tr></thead><tbody></tbody></table></div>
+        <p class="hint sheet-hint">Клацніть рядок, щоб побачити відомості про поїзд.</p>
       </div>
     </div>
     <div class="col col-log">
@@ -150,12 +122,15 @@
   <div class="card"><h2>Історичні відомості (окремо від моделі)</h2><div class="hist-list" id="histList"></div></div>
 </section>
 
-<footer>Топологію змінюють у <code>js/topology.js</code>, графік і модельні параметри у <code>js/schedule.js</code>. Назви блоків (1СП, IП-1…), поділ колій на блоки і довжини поїздів у блоках — модельні. Порожні кружки М1–М22 — маневрові світлофори, якими в моделі не керують.</footer>
+<footer>Топологію змінюють у <code>js/topology.js</code>, графік і модельні параметри у <code>js/schedule.js</code>. Назви блоків (1СП, IП-1…), поділ колій на блоки і довжини поїздів у блоках — модельні.</footer>
+
+<div class="card rku-card" id="rkuCard"><h2>Панель об'єкта <button class="sheet-close" id="rkuClose" aria-label="Закрити панель">✕</button></h2><div id="rku" class="hint">Нічого не вибрано.</div></div>
+<div class="card rku-card info-pop" id="infoPop"><h2>Поїзд <button class="sheet-close" id="infoClose" aria-label="Закрити">✕</button></h2><div id="trainBox"></div></div>
 
 <div id="accident" class="accident" hidden role="alert"><b>АВАРІЯ</b><span id="accText"></span><button id="accClose" aria-label="Закрити повідомлення">✕</button></div>
 
 <section id="radio" class="radio-win" hidden aria-label="Радіо і телефонограми">
-  <header class="radio-head" id="radioHead"><b>📻 Радіо · поїзні телефонограми</b><span class="hint">ІРП ЦД-0058, розділ 9</span><button id="radioClose" aria-label="Закрити радіо">✕</button></header>
+  <header class="radio-head win-title" id="radioHead"><b><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg> Радіо · поїзні телефонограми</b><span class="hint">ІРП ЦД-0058, розділ 9</span><button id="radioClose" aria-label="Закрити радіо">✕</button></header>
   <div class="radio-body">
     <div class="radio-who"><label>ДСП Сокологірне: <input id="dspName" value="Іваненко" maxlength="20"></label></div>
     <div class="radio-tabs"><button data-r="live" class="on">Ефір</button><button data-r="jy">Журнал ДУ-47: Якимівка</button><button data-r="jp">Журнал ДУ-47: Партизани</button></div>
@@ -194,13 +169,28 @@
     <h4>Маневрові роботи</h4>
     <p>У графіку їх видно як рядки <b>МН-…</b> (жовті). Генератор дає 5–12 робіт на добу: подача на колію 14 (тягова підстанція ЕЧ-4), тупик 15, колія 10 (ПЧ-4), перестановки 4→6 і 3→I з витягуванням за М6/М2. Коли настає час, локомотив з'являється на ділянці початку, а в «Найближча подія» з'являється покроковий план: який маневровий світлофор відкрити і до якого кінця. Можна й самому поставити локомотив: клацніть ділянку → «Поставити маневровий локомотив».</p>
     <h4>Радіо і телефонограми (ІРП ЦД-0058, розділ 9)</h4>
-    <p>Кнопка «📻 Радіо» відкриває окреме вікно (його можна перетягувати). Сусідня станція повідомляє про відправлення поїзда до вас (форма 3) — натисніть «Повторити текст», вона відповість «Вірно». Коли ваш поїзд прибув, відправився або пройшов без зупинки, з'являється завдання передати телефонограму за формою 4, 3 або 11: «Передати» → сусід повторює → «Вірно». Невиконане за 3 хв пишеться в журнал. Записи йдуть у журнали ДУ-47 окремо для кожного перегону, номери — з № 1 щодоби. Машиніст викликає, якщо стоїть біля закритого сигналу.</p>
+    <p>Кнопка з телефонною трубкою «Радіо» відкриває окреме вікно (його можна перетягувати). Сусідня станція повідомляє про відправлення поїзда до вас (форма 3) — натисніть «Повторити текст», вона відповість «Вірно». Коли ваш поїзд прибув, відправився або пройшов без зупинки, з'являється завдання передати телефонограму за формою 4, 3 або 11: «Передати» → сусід повторює → «Вірно». Невиконане за 3 хв пишеться в журнал. Записи йдуть у журнали ДУ-47 окремо для кожного перегону, номери — з № 1 щодоби. Машиніст викликає, якщо стоїть біля закритого сигналу.</p>
     <h4>Режим управління і індикатори</h4>
     <p>ОСНОВН. / РЕЗЕРВН. / ДОПОМІЖ. — у допоміжному режимі маршрути задаються тільки після індивідуального переведення стрілок, а «Допоміжне переведення» спрацьовує навіть під замкнутим маршрутом. Якщо перевести стрілку перед поїздом, що вже рушив за маршрутом, станеться <b>схід з рейок або зіткнення</b>: зліва вгорі з'явиться причина, і доба почнеться з 00:00. Лампи ЗАПОБІЖН., УПОВІЛЬН. КОЛ.ПОВТ., РЕЗЕРВ. КВ. взято з рисунка пульта; у навчальному режимі вони вмикаються кліком як несправність (їхнє точне значення в посібнику не описане).</p>
     <h4>Вагони в тупиках</h4>
     <p>Маневрові роботи подають вагони на колії 14, 15 і 10 і залишають їх там (на схемі «ваг.», ділянка червона), доки інша робота їх не прибере. Маневровий маршрут на зайняту колію дозволено.</p>
     <h4>Вигляд</h4>
-    <p>«▣ Лише пульт» згортає все, крім пульта. ФОН: чорний або сірий (як на рисунку АРМ). Панель об'єкта відкривається поруч з об'єктом.</p>
+    <p>Фон пульта: <span class="seg" id="themeSeg"><button data-t="black" class="on">чорний</button><button data-t="grey">сірий</button></span></p>
+    <p>«▣ Лише пульт» згортає все, крім пульта, і розтягує план станції приблизно на 70 % висоти екрана. «⏱ Час» — пуск/пауза, прискорення x1–x60, прокрутка до події, скидання доби. Відомості про поїзд — клацнути рядок у розкладі або поїзд на схемі.</p>
+    <h4>Легенда</h4>
+    <div class="legend">
+      <div><span class="tube"></span>Ділянка вільна</div>
+      <div><span class="tube setting"></span>Бере участь у маршруті (набір, стрілки переводяться)</div>
+      <div><span class="tube lk-train"></span>Замкнена в поїзному маршруті</div>
+      <div><span class="tube lk-shunt"></span>Замкнена в маневровому маршруті</div>
+      <div><span class="tube occ"></span>Зайнята (поїзд, вагони)</div>
+      <div><span class="tube blocked"></span>Заблокована</div>
+      <div><span class="dot" style="background:#ff2b2b"></span><span class="dot" style="background:#2fe05a"></span>Поїзний світлофор: закритий / відкритий</div>
+      <div><span class="dot sm" style="background:#2f6bff"></span><span class="dot sm" style="background:#fff"></span>Маневровий: синій / білий</div>
+      <div><span class="dot" style="background:#ff2b2b"></span><span class="dot sm" style="background:#fff"></span>Запрошувальний (червоний + біле кільце)</div>
+      <div><b class="swnum">17</b>Жовтий номер: стрілка в мінусі; блимає — переводиться; червоний — немає контролю</div>
+      <div><b>тов / пас / ІС+ / ел / хоз / рез / ман</b>&nbsp;Типи в розкладі: товарний, пасажирський, Інтерсіті+, електропоїзд, господарський, резервний локомотив, маневровий</div>
+    </div>
     <h4>Графік руху</h4>
     <p>Над таблицею: час по горизонталі, Якимівка — Сокологірне — Партизани по вертикалі. Пунктир — план з графіка, суцільна лінія — як поїзд пройшов насправді (оновлюється наживо). Жовті смуги на станції — маневри. Червона вертикаль — поточний час. Кнопки 2/4/8 год, доба, ◄ ► і «Зараз».</p>
     <h4>Несправності і відповідальні команди</h4>
@@ -215,10 +205,13 @@
 </div>
 
 <div id="modal" class="modal-bg" hidden>
-  <div class="modal" role="dialog" aria-modal="true">
-    <h3 id="mTitle">Команда</h3>
-    <div id="mBody"></div>
-    <div class="btns"><button id="mOk">Виконати</button><button id="mCancel">Відмінити</button></div>
+  <div class="modal win" role="dialog" aria-modal="true" aria-labelledby="mWinTitle">
+    <div class="win-title"><span id="mWinTitle">Підтвердіть виконання команди</span><button id="mX" aria-label="Закрити">✕</button></div>
+    <div class="win-body">
+      <div class="m-obj" id="mTitle">Команда</div>
+      <div id="mBody"></div>
+      <div class="m-btns"><button id="mOk">Виконати</button><button id="mCancel">Відмінити</button></div>
+    </div>
   </div>
 </div>
 

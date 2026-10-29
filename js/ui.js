@@ -19,7 +19,10 @@
   // Signal lamp colours (handbook table 2.14). Set via style, not presentation attributes.
   const LAMP = { red: "#ff2b2b", green: "#2fe05a", white: "#ffffff", blue: "#2f6bff" };
 
-  const pt = (n) => (T.displayNodes && T.displayNodes[n]) || T.nodes[n];
+  // ui.vs stretches the plan vertically ("Лише пульт"): track spacing grows, symbols keep their size
+  const VY0 = 48, VH = 316;
+  const sy = (y) => VY0 + (y - VY0) * (ui.vs || 1);
+  const pt = (n) => { const p = (T.displayNodes && T.displayNodes[n]) || T.nodes[n]; return [p[0], sy(p[1])]; };
   const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const trackName = (g) => (g ? "колія " + g.replace("П", "") : "");
@@ -43,7 +46,7 @@
   // display points of an edge, including bends from T.displayVia
   function edgePts(a, b) {
     const V = T.displayVia || {};
-    const via = V[a + "|" + b] || (V[b + "|" + a] ? V[b + "|" + a].slice().reverse() : []);
+    const via = (V[a + "|" + b] || (V[b + "|" + a] ? V[b + "|" + a].slice().reverse() : [])).map(([x, y]) => [x, sy(y)]);
     return [pt(a), ...via, pt(b)];
   }
   function shrunk(a, b, cutA, cutB) {
@@ -58,11 +61,12 @@
     const nodeSecs = {};
     T.edges.forEach(([a, b, sec]) => [a, b].forEach((n) => (nodeSecs[n] = nodeSecs[n] || new Set()).add(sec)));
     const isJoint = (n) => nodeSecs[n].size > 1 && !/^S/.test(n);
-    [[1089, 100, 238, 37], [1065, 270, 497, 11], [1065, 339, 497, 11]].forEach(([x, y, w, h]) => el("rect", { x, y, width: w, height: h, class: "platform" }, svg));
-    const note = (x, y, t, cls) => (el("text", { x, y, class: cls || "note" }, svg).textContent = t);
+    svg.setAttribute("viewBox", "-165 " + VY0 + " 2895 " + Math.round(VH * (ui.vs || 1)));
+    [[1089, 100, 238, 37], [1065, 270, 497, 11], [1065, 339, 497, 11]].forEach(([x, y, w, h]) => el("rect", { x, y: sy(y + h / 2) - h / 2, width: w, height: h, class: "platform" }, svg));
+    const note = (x, y, t, cls) => (el("text", { x, y: sy(y), class: cls || "note" }, svg).textContent = t);
     note(-150, 226, "← ЯКИМІВКА · парний"); note(2440, 352, "ПАРТИЗАНИ · непарний →");
     note(250, 66, "Тяг. підст. ЕЧ-4"); note(2125, 177, "ПЧ-4"); note(2385, 205, "1272 км+302 м");
-    el("line", { x1: 2375, y1: 210, x2: 2375, y2: 355, class: "border" }, svg);
+    el("line", { x1: 2375, y1: sy(210), x2: 2375, y2: sy(355), class: "border" }, svg);
     // Draw order: inactive switch legs (dim) at the bottom, sloped branches, then straight tracks on top.
     gXO = el("g", {}, svg); gXI = el("g", {}, svg);
     const gSO = el("g", {}, svg), gSI = el("g", {}, svg), gO = el("g", {}, svg), gI = el("g", {}, svg), gHit = el("g", {}, svg);
@@ -78,9 +82,9 @@
       hit.addEventListener("click", (ev) => onObjectClick({ kind: "sec", id: sec }, ev));
       edgeEls.push({ o, i, sec, leg, home: [sloped ? gSO : gO, sloped ? gSI : gI], off: false });
     });
-    T.labels.forEach(([t, x, y]) => (el("text", { x, y: y - 6, class: "trk-label" }, svg).textContent = t));
+    T.labels.forEach(([t, x, y]) => (el("text", { x, y: sy(y + 6) - 12, class: "trk-label" }, svg).textContent = t));
     [["2НП", -95, 314], ["1НП", 15, 314], ["1ЧП", 2520, 244], ["2ЧП", 2650, 244], ["1НУП", 2490, 314], ["2НУП", 2640, 314], ["1ЧУП", 110, 244], ["2ЧУП", -65, 244]]
-      .forEach(([t, x, y]) => (el("text", { x, y, class: "blk-label" }, svg).textContent = t));
+      .forEach(([t, x, y]) => (el("text", { x, y: y > 280 ? sy(294) + 20 : sy(257) - 13, class: "blk-label" }, svg).textContent = t));
     // switches: number on the side shown on the plan; lock sign and red block square per table 2.16
     T.switches.forEach((s) => {
       const [x, y] = pt(s.node);
@@ -114,7 +118,7 @@
     (T.endButtons || []).forEach((b) => {
       const [x, y] = pt(b.node), xx = x + (b.dx || 0), yy = y + (b.side || -1) * 15;
       const g = el("g", { class: "endbtn" }, svg);
-      const r = el("rect", { x: xx - 8, y: yy - 6, width: 16, height: 12, rx: 2 }, g);
+      const r = el("rect", { x: xx - 8, y: yy - 6, width: 16, height: 12 }, g);
       el("text", { x: xx + 12, y: yy + 4 }, g).textContent = b.id;
       el("title", {}, g).textContent = b.note;
       g.addEventListener("click", (ev) => onObjectClick({ kind: "end", id: b.id }, ev));
@@ -197,7 +201,7 @@
       if (!st.wagons || st.occ != null) return;
       const [x, y] = secMid(id);
       const g = el("g", { class: "train wagons", transform: `translate(${x},${y})` }, trainLayer);
-      el("rect", { x: -18, y: -9, width: 36, height: 17, rx: 2 }, g);
+      el("rect", { x: -18, y: -9, width: 36, height: 17 }, g);
       el("text", { x: 0, y: 4, "text-anchor": "middle" }, g).textContent = "ваг.";
       el("title", {}, g).textContent = "Вагони стоять на " + id + " з " + E.fmt(st.wagons.since).slice(0, 5) + " (залишив " + st.wagons.num + ")";
     });
@@ -208,10 +212,10 @@
       const g = el("g", { class: "train " + tr.type + (late > 0 ? " late" : ""), transform: `translate(${x},${y})` }, trainLayer);
       const label = (tr.parity === "even" ? "◄" : "") + tr.num + (tr.parity === "odd" ? "►" : "") + (late > 0 ? " +" + late : "");
       const w = 12 + label.length * 7.4;
-      el("rect", { x: -w / 2, y: -9, width: w, height: 17, rx: 2 }, g);
+      el("rect", { x: -w / 2, y: -9, width: w, height: 17 }, g);
       el("text", { x: 0, y: 4, "text-anchor": "middle" }, g).textContent = label;
       el("title", {}, g).textContent = (tr.type === "shunting" ? "Маневровий " : "Поїзд ") + tr.num + ": " + tr.status;
-      g.addEventListener("click", (ev) => { ev.stopPropagation(); ui.selTrain = tr.id; ui.selEvent = tr.eventIdx; renderTrain(); });
+      g.addEventListener("click", (e2) => { e2.stopPropagation(); if (tr.eventIdx != null) openInfo(tr.eventIdx, e2.clientX, e2.clientY); });
     });
   }
 
@@ -246,11 +250,14 @@
   function finishPick(endId) {
     const r = routeForEnd(endId);
     if (!r) { toast("Маршруту від " + ui.pick.from + " до «" + endName(endId) + "» немає. Виберіть підсвічений кінець або Esc — відміна набору.", "err"); return; }
-    const mode = ui.pick.mode;
-    const res = sim.setRoute(r.id, null, mode, true);
-    if (res.ok) { stopPick(); toast("Маршрут " + r.id + ": стрілки переводяться, після замикання світлофор відкриється.", "ok"); }
-    else toast("Маршрут " + r.id + " не встановлено: " + res.err + ". Виберіть інший кінець або Esc.", "err");
-    refresh();
+    const mode = ui.pick.mode, from = ui.pick.from;
+    const endObj = D.sections[endId] ? (D.sections[endId].group || endId) : endId;
+    confirmCmd(mode === "shunt" ? "ММЗ" : "ПМЗ", endObj, "Задати " + (mode === "shunt" ? "маневровий" : "поїзний") + " маршрут від " + from + " до " + endObj, false, () => {
+      const res = sim.setRoute(r.id, null, mode, true);
+      if (res.ok) { stopPick(); toast("Маршрут " + r.id + ": стрілки переводяться, після замикання світлофор відкриється.", "ok"); }
+      else toast("Маршрут " + r.id + " не встановлено: " + res.err + ". Виберіть інший кінець або Esc.", "err");
+      return res;
+    });
   }
   // a line from the start signal to the cursor (green — train, yellow — shunting)
   svg.addEventListener("pointermove", (ev) => {
@@ -387,44 +394,46 @@
     if (c === "pickend") { finishPick(a); return; }
     if (c === "pickcancel") { stopPick("Набір маршруту відмінено."); return; }
     const S = sim.S;
+    const rd = sim.routeDef(a);
     const map = {
-      open: ["ВС", "Світлофор " + a, "Повторно відкрити світлофор за замкнутим маршрутом.", false, () => sim.openSignal(a)],
-      close: ["ЗС", "Світлофор " + a, "Закрити світлофор. Маршрут лишається замкнутим.", false, () => sim.closeSignal(a)],
-      cancel: ["МВ", "Відміна маршруту " + a, "Світлофор закриється; маршрут розімкнеться після витримки комплекту: вільне наближення 6 с, маневровий 60 с, поїзний 180 с.", true, () => sim.cancelRoute(a)],
-      inv: ["ЗС", "Запрошувальний на " + a, "Увімкнути запрошувальний сигнал (горить до 90 с). Поїзд проїде червоний зі швидкістю до 20 км/год за положенням стрілок. Перед цим переконайтесь, що стрілки стоять правильно і колія вільна.", true, () => sim.inviteSignal(a)],
-      sigblock: ["БЛ", "Світлофор " + a, S.sig[a] && S.sig[a].blocked ? "Розблокувати світлофор." : "Заблокувати світлофор: набір маршрутів від нього буде неможливий.", S.sig[a] && S.sig[a].blocked, () => sim.toggleSignalBlock(a)],
-      "sw+": ["ПС+", "Стрілка " + a, "Перевести стрілку в плюс.", false, () => sim.moveSwitch(a, "+")],
-      "sw-": ["ПС−", "Стрілка " + a, "Перевести стрілку в мінус.", false, () => sim.moveSwitch(a, "-")],
-      aux: ["ДП", "Стрілка " + a, "Допоміжне переведення при хибній зайнятості. Ви особисто переконались, що секція вільна (запис у Журналі огляду).", true, () => sim.moveSwitch(a, S.sw[a].pos === "+" ? "-" : "+", true)],
-      swlock: ["ЗП", "Стрілка " + a, "Блокування / розблокування положення стрілки (замок).", S.sw[a] && S.sw[a].lockedInd, () => sim.toggleSwitchLock(a)],
-      swblock: ["БЛ", "Стрілка " + a, "Блокування / розблокування стрілки.", S.sw[a] && S.sw[a].blocked, () => sim.toggleSwitchBlock(a)],
-      swfault: ["НС", "Стрілка " + a, S.sw[a] && S.sw[a].lost ? "Електромеханік відновив контроль." : "Навчання: стрілка втрачає контроль положення (розріз).", false, () => sim.setFault("sw", a, !S.sw[a].lost)],
-      secblock: ["БЛ", "Ділянка " + a, "Блокування / розблокування ділянки.", S.sec[a] && S.sec[a].blocked, () => sim.toggleSectionBlock(a)],
-      art: ["ШР", "Ділянка " + a, "Штучне розмикання з витримкою " + Math.round(P.artReleaseSec / 60) + " хв. Переконайтесь, що рухомого складу на ділянці немає.", true, () => sim.artRelease(a)],
-      secfault: ["НС", "Ділянка " + a, S.sec[a] && S.sec[a].falseOcc ? "Усунути хибну зайнятість." : "Навчання: ділянка показуватиме зайнятість без поїзда.", false, () => sim.setFault("sec", a, !S.sec[a].falseOcc)],
-      loco: ["ЛК", "Ділянка " + a, "Поставити маневровий локомотив. Він рушить, коли перед ним відкриється маневровий світлофор.", false, () => sim.spawnLoco(a)],
-      locodel: ["ЛК", "Локомотив", "Прибрати маневровий локомотив зі схеми.", false, () => sim.removeLoco(+a)]
+      open: ["ПВС", a, "Повторно відкрити світлофор", false, () => sim.openSignal(a)],
+      close: ["ЗСВ", a, "Закрити світлофор", false, () => sim.closeSignal(a)],
+      cancel: ["МВ", rd ? rd.from : a, "Відмінити (скасувати) маршрут", true, () => sim.cancelRoute(a)],
+      inv: ["ЗПС", a, "Увімкнути запрошувальний сигнал (до 90 с, поїзд ≤20 км/год)", true, () => sim.inviteSignal(a)],
+      sigblock: ["БЛС", a, S.sig[a] && S.sig[a].blocked ? "Розблокувати світлофор" : "Заблокувати світлофор", S.sig[a] && S.sig[a].blocked, () => sim.toggleSignalBlock(a)],
+      "sw+": ["СП+", "Стрілка " + a, "Перевести стрілку в плюсове положення", false, () => sim.moveSwitch(a, "+")],
+      "sw-": ["СП−", "Стрілка " + a, "Перевести стрілку в мінусове положення", false, () => sim.moveSwitch(a, "-")],
+      aux: ["ДПС", "Стрілка " + a, "Допоміжне переведення стрілки (секцію перевірено особисто)", true, () => sim.moveSwitch(a, S.sw[a].pos === "+" ? "-" : "+", true)],
+      swlock: ["БПС", "Стрілка " + a, S.sw[a] && S.sw[a].lockedInd ? "Розблокувати положення стрілки" : "Заблокувати положення стрілки", S.sw[a] && S.sw[a].lockedInd, () => sim.toggleSwitchLock(a)],
+      swblock: ["БЛСТ", "Стрілка " + a, S.sw[a] && S.sw[a].blocked ? "Розблокувати стрілку" : "Заблокувати стрілку", S.sw[a] && S.sw[a].blocked, () => sim.toggleSwitchBlock(a)],
+      swfault: ["НС", "Стрілка " + a, S.sw[a] && S.sw[a].lost ? "Відновити контроль стрілки (електромеханік)" : "Навчання: ввести втрату контролю стрілки", false, () => sim.setFault("sw", a, !S.sw[a].lost)],
+      secblock: ["БЛД", a, S.sec[a] && S.sec[a].blocked ? "Розблокувати ділянку" : "Заблокувати ділянку", S.sec[a] && S.sec[a].blocked, () => sim.toggleSectionBlock(a)],
+      art: ["ШР", a, "Штучне розмикання ділянки (витримка " + Math.round(P.artReleaseSec / 60) + " хв)", true, () => sim.artRelease(a)],
+      secfault: ["НС", a, S.sec[a] && S.sec[a].falseOcc ? "Усунути хибну зайнятість" : "Навчання: ввести хибну зайнятість ділянки", false, () => sim.setFault("sec", a, !S.sec[a].falseOcc)],
+      loco: ["ЛК", a, "Поставити маневровий локомотив", false, () => sim.spawnLoco(a)],
+      locodel: ["ЛК", "Локомотив", "Прибрати маневровий локомотив", false, () => sim.removeLoco(+a)]
     };
     const [mn, obj, desc, resp, fn] = map[c];
     confirmCmd(mn, obj, desc, resp, fn);
   });
 
   let pending = null;
-  function confirmCmd(mn, obj, desc, resp, fn) {
+  // dialog as in the АРМ: «Підтвердіть виконання (відповідальної) команди»
+  function confirmCmd(mn, obj, desc, resp, fn, onCancel) {
     const code = String(100 + Math.floor(rnd() * 900));
-    pending = { fn, resp, code };
+    pending = { fn, resp, code, onCancel };
+    $("mWinTitle").textContent = resp ? "Підтвердіть виконання відповідальної команди" : "Підтвердіть виконання команди";
     $("mTitle").textContent = obj;
-    $("mBody").innerHTML = `<p><b>${esc(mn)}</b> — ${esc(desc)}</p>` + (resp
-      ? `<p class="resp">Відповідальна команда. Потрібен код пильності — три цифри, щоразу нові:</p>
-         <div class="code">${code}</div>
-         <label class="codein">Введіть код: <input id="mCode" inputmode="numeric" maxlength="3" autocomplete="off" value="${ui.autoCode ? code : ""}"></label>
-         <p class="hint">${ui.autoCode ? "Навчальний режим: код уже вписано, натисніть «Виконати»." : "Перепишіть три цифри в поле."}</p>`
-      : "");
+    $("mBody").innerHTML = resp
+      ? `<p class="m-cmd"><b class="m-red">Команда</b> <span class="m-red">- ${esc(desc)}</span></p>
+         <div class="m-code"><span>Для підтвердження введіть число</span><b>${code}</b><input id="mCode" inputmode="numeric" maxlength="3" autocomplete="off" aria-label="Число для підтвердження" value="${ui.autoCode ? code : ""}"></div>`
+      : `<p class="m-cmd">${esc(mn)} - ${esc(desc)}</p>`;
     $("modal").hidden = false;
     (resp && !ui.autoCode ? $("mCode") : $("mOk")).focus();
   }
   function closeModal() { $("modal").hidden = true; pending = null; }
-  $("mCancel").onclick = () => { if (pending) sim.log("cmd", "Команду відмінено ДСП"); closeModal(); refresh(); };
+  $("mX").onclick = () => $("mCancel").click();
+  $("mCancel").onclick = () => { if (pending) { sim.log("cmd", "Команду відмінено ДСП"); if (pending.onCancel) pending.onCancel(); } closeModal(); refresh(); };
   $("mOk").onclick = () => {
     if (!pending) return;
     if (pending.resp && (!$("mCode") || $("mCode").value.trim() !== pending.code)) { sim.log("error", "Код пильності не збігся — відповідальну команду не виконано"); toast("Код пильності не збігся. Команду не виконано.", "err"); closeModal(); refresh(); return; }
@@ -489,7 +498,14 @@
     }
     return ["p-planned", "модельний час"];
   };
-  const typeShort = { passenger: "пас.", freight: "ван.", shunting: "ман.", electric: "ел.", intercity: "ІС", test: "тест" };
+  const typeShort = { passenger: "пас", freight: "тов", shunting: "ман", electric: "ел", intercity: "ІС+", test: "тест", household: "хоз", reserve: "рез" };
+  const BASE_DATE = Date.UTC(2014, 9, 28);
+  const dateStr = (day) => { const d = new Date(BASE_DATE + (day - 1) * 86400000); return String(d.getUTCDate()).padStart(2, "0") + "." + String(d.getUTCMonth() + 1).padStart(2, "0") + "." + d.getUTCFullYear(); };
+  const ends = (ev) => {
+    if (ev.ev.type === "shunting") return ["Сокологірне", "Сокологірне"];
+    if (ev.ev.from) return [ev.ev.from, ev.ev.to];
+    return ev.ev.direction === "Dzhankoi" ? ["Мелітополь", "Джанкой"] : ["Джанкой", "Мелітополь"];
+  };
 
   function renderEvents(full) {
     const S = sim.S, tb = $("evTable").tBodies[0];
@@ -497,23 +513,37 @@
     if (full || tb.rows.length !== S.events.length || ui.evRef !== S.events) {
       ui.evRef = S.events;
       $("evDay").textContent = "· доба " + S.day + " · " + S.events.length + " подій";
+      const date = dateStr(S.day);
       tb.innerHTML = S.events.map((ev, i) => {
-        const a = advice(ev);
-        const job = ev.ev.job && P.shuntingJobs[ev.ev.job];
-        const dir = job ? job.name : (P.directionLabel[ev.ev.direction] || ev.ev.direction) + (ev.ev.action === "stand" ? " · стоянка " + ev.ev.stopMin + " хв" : ev.ev.stopMin ? " · зуп. " + ev.ev.stopMin + " хв" : "");
-        return `<tr class="ev${ev.ev.type === "shunting" ? " sh" : ""}" data-i="${i}"><td>${esc(ev.ev.time)}</td><td><b>${esc(ev.ev.train)}</b></td><td>${typeShort[ev.ev.type] || ""}</td><td class="dircell" title="${esc(dir)}">${esc(dir)}</td><td>${a ? esc(a.track.replace("колія ", "")) : job ? esc(job.start.replace(/П.*/, "")) : "—"}</td><td class="stc"></td><td><input type="number" min="0" max="600" value="${ev.delayMin}" data-d="${i}" aria-label="Затримка поїзда ${esc(ev.ev.train)}, хв"></td></tr>`;
+        const [f, t] = ends(ev);
+        return `<tr class="ev" data-i="${i}"><td><b>${esc(ev.ev.train)}</b></td><td>${date}</td><td class="tm">${esc(ev.ev.time)}</td><td>${typeShort[ev.ev.type] || ""}</td><td>${esc(f)}</td><td>${esc(t)}</td></tr>`;
       }).join("");
     }
     S.events.forEach((ev, i) => {
-      const row = tb.rows[i]; const [cls, txt] = statusInfo(ev);
-      const html = `<span class="pill ${cls}" title="${ev.needsConfig ? esc(ev.needsConfig) : "Час вигаданий (" + ev.ev.timeStatus + ")"}">${esc(txt)}</span>`;
-      const c = row.querySelector(".stc"); if (c.innerHTML !== html) c.innerHTML = html;
-      row.classList.toggle("sel", ui.selEvent === i);
-      const inp = row.querySelector("input"); inp.disabled = !(ev.status === "planned" || ev.status === "waiting");
+      const row = tb.rows[i], late = sim.lateMin(ev);
+      const st = ev.status === "passed" ? "done" : ev.status === "config" ? "cfg" : ev.status === "active" ? "act" : ev.status === "waiting" ? "wait" : "";
+      const cls = "ev " + st + (late > 0 ? " late" : "") + (ui.selEvent === i ? " sel" : "");
+      if (row.className !== cls) row.className = cls;
+      const tm = row.cells[2], txt = ev.ev.time + (late > 0 ? " +" + late : "");
+      if (tm.textContent !== txt) tm.textContent = txt;
     });
   }
-  $("evTable").addEventListener("change", (e) => { const i = e.target.dataset.d; if (i == null) return; sim.setDelay(+i, Math.max(0, +e.target.value || 0)); refresh(); });
-  $("evTable").addEventListener("click", (e) => { if (e.target.tagName === "INPUT") return; const r = e.target.closest("tr.ev"); if (!r) return; ui.selEvent = +r.dataset.i; const ev = sim.S.events[ui.selEvent]; ui.selTrain = ev.trainId; renderTrain(); renderEvents(); });
+  // train information only on a click in the timetable (or on the train on the diagram)
+  function openInfo(i, x, y) {
+    ui.selEvent = i; ui.selTrain = sim.S.events[i] && sim.S.events[i].trainId;
+    const pop = $("infoPop"); pop.classList.add("open"); $("trainBox").__h = undefined;
+    renderTrain(); renderEvents();
+    if (window.innerWidth >= 720) {
+      const w = 360, h = Math.min(pop.offsetHeight || 320, window.innerHeight * 0.7);
+      let left = x + 16, top = y - 30;
+      if (left + w > window.innerWidth - 8) left = x - w - 16;
+      if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+      pop.style.left = Math.max(8, left) + "px"; pop.style.top = Math.max(8, top) + "px";
+    } else { pop.style.left = pop.style.top = ""; }
+  }
+  $("infoClose").onclick = () => { $("infoPop").classList.remove("open"); ui.selEvent = null; ui.selTrain = null; renderEvents(); };
+  $("evTable").addEventListener("click", (e) => { const r = e.target.closest("tr.ev"); if (!r) return; openInfo(+r.dataset.i, e.clientX, e.clientY); });
+  $("trainBox").addEventListener("change", (e) => { const i = e.target.dataset.d; if (i == null) return; sim.setDelay(+i, Math.max(0, +e.target.value || 0)); refresh(); });
 
   function adviceHtml(ev) {
     const job = ev.ev.job && P.shuntingJobs[ev.ev.job];
@@ -535,29 +565,31 @@
     else { const n = sim.nextEvent(); if (!n) { $("nextBox").innerHTML = "Подій до кінця доби немає."; return; } ev = n.e; at = n.at; }
     const dt = at - S.time, late = sim.lateMin(ev);
     const [cls, txt] = statusInfo(ev);
-    const html = `<div class="next"><span class="big">${esc(ev.ev.train)}</span><span>${esc(P.directionLabel[ev.ev.direction] || ev.ev.direction)} · ${typeShort[ev.ev.type] || ""} · <span class="pill ${cls}">${esc(txt)}</span></span>
+    const [nf, nt] = ends(ev);
+    const html = `<div class="next"><span class="big">${esc(ev.ev.train)}</span><span>${esc(typeShort[ev.ev.type] || "")} · ${esc(nf)} — ${esc(nt)} · <span class="pill ${cls}">${esc(txt)}</span></span>
       <span class="hint">о ${E.fmt(at).slice(0, 5)}</span><span>${late > 0 ? `<b class="late">Запізнюється на ${late} хв</b>` : dt > 0 ? "через " + Math.floor(dt / 60) + " хв " + (dt % 60) + " с" : "зараз"}${ev.delayMin ? " · задана затримка " + ev.delayMin + " хв" : ""}</span></div>` + adviceHtml(ev);
     if ($("nextBox").__h !== html) { $("nextBox").innerHTML = html; $("nextBox").__h = html; }
   }
 
   function renderTrain() {
     const box = $("trainBox"), S = sim.S;
-    const tr = ui.selTrain != null ? S.trains.find((t) => t.id === ui.selTrain) : null;
-    const ev = ui.selEvent != null ? S.events[ui.selEvent] : tr && tr.eventIdx != null ? S.events[tr.eventIdx] : null;
-    let h;
-    if (!tr && !ev) { h = null; }
-    else if (!tr) {
-      h = `<dl class="kv"><dt>Поїзд</dt><dd><b>${esc(ev.ev.train)}</b> (${esc(typeShort[ev.ev.type] || ev.ev.type)})</dd><dt>Час (модель)</dt><dd>${esc(ev.ev.time)}${ev.delayMin ? " + " + ev.delayMin + " хв" : ""}</dd><dt>Напрямок</dt><dd>${esc(P.directionLabel[ev.ev.direction] || ev.ev.direction)}</dd><dt>Стан</dt><dd>${esc(statusInfo(ev)[1])}</dd>${ev.needsConfig ? `<dt>Потрібно</dt><dd>${esc(ev.needsConfig)}</dd>` : ""}</dl>` + adviceHtml(ev);
-    } else {
-      const late = ev ? sim.lateMin(ev) : 0;
-      h = `<dl class="kv"><dt>Поїзд</dt><dd><b>${esc(tr.num)}</b> · ${esc(typeShort[tr.type] || tr.type)}${tr.parity ? " · " + (tr.parity === "odd" ? "непарний" : "парний") : ""}</dd>
-        <dt>Довжина</dt><dd>${tr.len} бл. (модель)</dd><dt>Стан</dt><dd>${esc(tr.status)}</dd>${late > 0 ? `<dt>Запізнення</dt><dd><b class="late">${late} хв</b></dd>` : ""}
-        <dt>Займає</dt><dd>${esc(tr.occ.join(", "))}</dd><dt>Наступний сигнал</dt><dd>${esc(tr.nextSignal || "—")}</dd>
-        <dt>Чекав</dt><dd>${tr.waitSec ? Math.round(tr.waitSec / 60) + " хв" : "—"}</dd></dl>` + (ev ? adviceHtml(ev) : "");
+    const ev = ui.selEvent != null ? S.events[ui.selEvent] : null;
+    const tr = ev && ev.trainId != null ? S.trains.find((t) => t.id === ev.trainId) : ui.selTrain != null ? S.trains.find((t) => t.id === ui.selTrain) : null;
+    let h = null;
+    if (ev) {
+      const [f, t] = ends(ev), late = sim.lateMin(ev);
+      const job = ev.ev.job && P.shuntingJobs[ev.ev.job];
+      h = `<dl class="kv"><dt>№ поїзда</dt><dd><b>${esc(ev.ev.train)}</b> · ${esc(typeShort[ev.ev.type] || ev.ev.type)}</dd>
+        <dt>Дата, час</dt><dd>${dateStr(S.day)} ${esc(ev.ev.time)}${ev.delayMin ? " (+" + ev.delayMin + " хв задано)" : ""}</dd>
+        <dt>Від — до</dt><dd>${esc(f)} — ${esc(t)}</dd>
+        ${job ? `<dt>Робота</dt><dd>${esc(job.name)}</dd>` : ""}${ev.ev.note ? `<dt>Примітка</dt><dd>${esc(ev.ev.note)}</dd>` : ""}
+        <dt>Стан</dt><dd>${esc(statusInfo(ev)[1])}</dd>${late > 0 ? `<dt>Запізнення</dt><dd><b class="late">${late} хв</b></dd>` : ""}
+        ${tr ? `<dt>Довжина</dt><dd>${tr.len} бл.</dd><dt>Займає</dt><dd>${esc(tr.occ.join(", ") || "—")}</dd><dt>Наступний сигнал</dt><dd>${esc(tr.nextSignal || "—")}</dd>` : ""}
+        ${ev.status === "planned" || ev.status === "waiting" ? `<dt>Затримка, хв</dt><dd><input type="number" min="0" max="600" value="${ev.delayMin}" data-d="${ev.idx}" aria-label="Затримка, хв" style="width:80px"></dd>` : ""}</dl>` + adviceHtml(ev);
     }
     if (box.__h === h) return;
     box.__h = h;
-    if (h == null) { box.className = "hint"; box.textContent = "Виберіть поїзд на схемі або в графіку."; } else { box.className = ""; box.innerHTML = h; }
+    box.innerHTML = h || "";
   }
 
   function renderLog(full) {
@@ -579,16 +611,30 @@
   }
   $("logFilters").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; ui.logFilter = b.dataset.f; [...$("logFilters").children].forEach((x) => x.classList.toggle("on", x === b)); renderLog(true); });
 
+  const ac = $("aclock");
+  (function buildClock() {
+    let h = '<circle r="46" class="ac-face"/>';
+    for (let i = 0; i < 60; i++) {
+      const a = (i * Math.PI) / 30, long = i % 5 === 0, r1 = long ? 36 : 41;
+      h += `<line x1="${(Math.sin(a) * r1).toFixed(2)}" y1="${(-Math.cos(a) * r1).toFixed(2)}" x2="${(Math.sin(a) * 45).toFixed(2)}" y2="${(-Math.cos(a) * 45).toFixed(2)}" class="${long ? "ac-hr" : "ac-min"}"/>`;
+    }
+    h += '<line id="acH" class="ac-hh" x1="0" y1="4" x2="0" y2="-24"/><line id="acM" class="ac-mh" x1="0" y1="6" x2="0" y2="-36"/><line id="acS" class="ac-sh" x1="0" y1="8" x2="0" y2="-40"/><circle r="2.5" class="ac-pin"/>';
+    ac.innerHTML = h;
+  })();
   function renderClock() {
-    const S = sim.S;
-    $("clock").textContent = E.fmt(S.time);
-    $("dateLine").textContent = "Доба " + S.day + " · умовна дата 28.10.2014" + (S.paused ? " · зупинено" : "");
+    const S = sim.S, t = S.time;
+    const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = t % 60;
+    $("clock").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0") + "." + String(ss).padStart(2, "0");
+    $("dateLine").textContent = dateStr(S.day) + (S.paused ? " · зупинено" : "");
+    $("acH").setAttribute("transform", "rotate(" + (((hh % 12) + mm / 60) * 30) + ")");
+    $("acM").setAttribute("transform", "rotate(" + ((mm + ss / 60) * 6) + ")");
+    $("acS").setAttribute("transform", "rotate(" + (ss * 6) + ")");
   }
 
   // ---------- графік руху: time–distance chart, plan dashed, executed solid ----------
   const G = { span: window.innerWidth < 600 ? 2 : 4, follow: true, start: 0, last: 0 };
   [...$("gSpan").children].forEach((x) => x.classList.toggle("on", +x.dataset.h === G.span));
-  const GCOL = { passenger: "#ff5a4e", intercity: "#ff8a3d", electric: "#2fe05a", freight: "#e8eef0", test: "#6aa7ff", shunting: "#ffd23f" };
+  const GCOL = { passenger: "#ff5a4e", intercity: "#ff8a3d", electric: "#2fe05a", freight: "#e8eef0", test: "#6aa7ff", shunting: "#ffd23f", household: "#c58cff", reserve: "#6ad8ff" };
   function drawGraph(force) {
     const S = sim.S, cv = $("graph");
     const nowKey = Math.floor(S.time / 5) + ":" + S.day + ":" + G.span + ":" + G.start + ":" + G.follow;
@@ -692,7 +738,7 @@
   $("speedSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; ui.speed = +b.dataset.s; [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", x === b)); sim.log("cmd", "Швидкість x" + ui.speed); renderLog(); });
   $("btnReset").onclick = () => {
     sim.reset({ auto: $("chkAuto").checked, endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
-    ui.sel = null; ui.selTrain = null; ui.selEvent = null; acc = 0; if (ui.pick) stopPick();
+    ui.sel = null; ui.selTrain = null; ui.selEvent = null; acc = 0; $("infoPop").classList.remove("open"); if (ui.pick) stopPick();
     toast("Добу скинуто на 00:00:00.", "ok"); refresh(true);
   };
   $("chkAuto").onchange = (e) => { sim.S.auto = e.target.checked; sim.log("cmd", "Автодиспетчер " + (sim.S.auto ? "увімкнено: маршрути задає система" : "вимкнено: маршрути задає ДСП")); refresh(); };
@@ -714,7 +760,7 @@
   };
   function applySource(msg) {
     sim.setSchedule(scheduleSource(), { auto: $("chkAuto").checked, endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
-    ui.sel = null; ui.selTrain = null; ui.selEvent = null; acc = 0;
+    ui.sel = null; ui.selTrain = null; ui.selEvent = null; acc = 0; $("infoPop").classList.remove("open");
     toast(msg, "ok"); refresh(true);
   }
   $("selSrc").onchange = (e) => { src.kind = e.target.value; $("genCtl").hidden = src.kind !== "gen"; applySource(src.kind === "gen" ? "Згенеровано новий модельний графік." : "Завантажено графік із завдання (24 події)."); };
@@ -734,24 +780,23 @@
   }
   $("themeSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setTheme(b.dataset.t); });
   try { const t = localStorage.getItem("dsp-theme"); if (t) setTheme(t); } catch (e) { /* storage unavailable */ }
+  function fitConsole() {
+    if (!document.body.classList.contains("console-only")) { ui.vs = 1; return; }
+    const wrap = $("schemeWrap"), bar = wrap.querySelector(".indbar");
+    const w = ZOOMS[ui.zoom] || wrap.clientWidth || window.innerWidth, want = window.innerHeight * 0.7 - (bar ? bar.offsetHeight : 0);
+    ui.vs = Math.max(1, Math.min(4.5, want / ((w / 2895) * VH)));
+  }
   $("btnConsole").onclick = () => {
     const on = document.body.classList.toggle("console-only");
     $("btnConsole").classList.toggle("on", on);
     $("btnConsole").textContent = on ? "▤ Показати все" : "▣ Лише пульт";
-    drawGraph(true);
+    if (window.innerWidth >= 720) { if (on) { ui.zoomSaved = ui.zoom; ui.zoom = 0; } else if (ui.zoomSaved != null) ui.zoom = ui.zoomSaved; }
+    applyZoom(); fitConsole(); buildSvg(); drawGraph(true);
   };
+  window.addEventListener("resize", () => { if (document.body.classList.contains("console-only")) { fitConsole(); buildSvg(); } });
   $("btnHelp").onclick = () => { $("help").hidden = false; $("helpClose").focus(); };
   $("helpClose").onclick = () => { $("help").hidden = true; };
   $("help").addEventListener("click", (e) => { if (e.target === $("help")) $("help").hidden = true; });
-  const tracks = { odd: ["IП", "3П", "4П", "6П"], even: ["IIП", "4П", "6П", "3П"] };
-  function fillTracks() { $("tTrack").innerHTML = `<option value="">авто</option>` + tracks[$("tPar").value].map((t) => `<option value="${t}">${trackName(t)}</option>`).join(""); }
-  $("tPar").onchange = fillTracks; fillTracks();
-  $("testForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    sim.addTestTrain({ num: $("tNum").value.trim() || undefined, parity: $("tPar").value, track: $("tTrack").value || null, inMin: +$("tIn").value || 0, stopMin: +$("tStop").value || 0 });
-    const m = /^(.*?)(\d+)$/.exec($("tNum").value); if (m) $("tNum").value = m[1] + (+m[2] + 1);
-    toast("Тестовий поїзд створено.", "ok"); refresh();
-  });
   $("tabSim").onclick = () => { $("viewSim").hidden = false; $("viewHist").hidden = true; $("tabSim").classList.add("on"); $("tabHist").classList.remove("on"); };
   $("tabHist").onclick = () => { $("viewSim").hidden = true; $("viewHist").hidden = false; $("tabHist").classList.add("on"); $("tabSim").classList.remove("on"); };
   const lvl = { plan: ["p-hist", "підтверджено планом / посібником"], source: ["p-hist", "джерело наведено, не перевірено повністю"], unconfirmed: ["p-planned", "не підтверджено"] };
@@ -784,9 +829,16 @@
     const z = +b.dataset.z;
     ui.zoom = z === 0 ? 0 : Math.max(0, Math.min(ZOOMS.length - 1, ui.zoom + z));
     applyZoom();
+    if (document.body.classList.contains("console-only")) { fitConsole(); buildSvg(); }
   });
   applyZoom();
-  if (window.innerWidth < 720) $("settings").open = false;
+  // drop-down tabs next to «?»: time, settings
+  function dropToggle(btn, panel) {
+    $(btn).addEventListener("click", (e) => { e.stopPropagation(); const open = $(panel).hidden; document.querySelectorAll(".drop-panel").forEach((p) => (p.hidden = true)); $(panel).hidden = !open; $(btn).setAttribute("aria-expanded", String(open)); });
+    $(panel).addEventListener("click", (e) => e.stopPropagation());
+  }
+  dropToggle("btnTime", "timePanel"); dropToggle("btnSet", "settings");
+  document.addEventListener("click", () => document.querySelectorAll(".drop-panel").forEach((p) => (p.hidden = true)));
   buildSvg();
   refresh(true);
   requestAnimationFrame(frame);
