@@ -127,7 +127,7 @@ window.TOPOLOGY = {
     { id:"М16", node:"B4",  dir:"L", side:-1, kind:"shunt", source:"plan" },
     { id:"М8",  node:"A6",  dir:"L", side:-1, kind:"shunt", source:"plan" },
     { id:"М6",  node:"M6n", dir:"L", side:-1, kind:"shunt", source:"plan" },
-    { id:"М4",  node:"M6n", dir:"R", side:1,  kind:"shunt", source:"plan" },
+    { id:"М4",  node:"M4n", dir:"R", side:1,  kind:"shunt", source:"plan", note:"стоїть правіше М6 (як на плані); між ними окрема ділянка 4-6ІД — місце для зміни напрямку маневрів" },
     { id:"М2",  node:"M2n", dir:"L", side:-1, kind:"shunt", source:"plan" }
   ],
   // Objects on the plan that are not signals controlled from the АРМ
@@ -183,7 +183,7 @@ window.TOPOLOGY.displayNodes = {
   S15:[737,153], K9:[680,153], S19:[642,115], J14:[607,80],
   F3:[1490,153], S18:[1749,188], E1:[1800,188], S16:[1784,223],
   S10:[1803,294], S6:[2036,257], S2:[2211,294],
-  B1:[215,257], B4:[1892,257], A6:[2070,294], M1n:[205,294], C1:[600,223], M7n:[665,188]
+  B1:[215,257], B4:[1892,257], A6:[2070,294], M1n:[205,294], M6n:[2234,257], M4n:[2292,257], C1:[600,223], M7n:[665,188]
 };
 // display-only bends: the 45° slope starts beyond the signal standing at the joint (as on the plan)
 window.TOPOLOGY.displayVia = {
@@ -251,7 +251,8 @@ window.TOPOLOGY.displayVia = {
   // insulating joints at shunting signals (positions from the plan)
   splitEdge("A1", "S1", [["M1n", 215, 294]], ["НІП", "1СП"]);
   splitEdge("X1113", "S13", [["M7n", 660, 188]], ["11СП", "13СП"]);
-  splitEdge("S4", "B6", [["M6n", 2240, 257]], ["4СП", "ЧІП"]);
+  splitEdge("S4", "B6", [["M6n", 2226, 257], ["M4n", 2262, 257]], ["4СП", "4-6ІД", "ЧІП"]);
+  T.sectionInfo["4-6ІД"] = { kind: "switchless", len: 90, label: "Ділянка між М6 і М4", source: "derived" };
   splitEdge("S2", "A7", [["M2n", 2335, 294]], ["2СП", "ЧДІП"]);
   T.sectionInfo["НІП"] = { kind: "switchless", len: 150, label: "Безстрілочна ділянка за вхідним Н", source: "derived" };
   T.sectionInfo["ЧІП"] = { kind: "switchless", len: 200, label: "Безстрілочна ділянка за вхідним Ч", source: "derived" };

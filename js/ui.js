@@ -157,7 +157,7 @@
     edgeEls.forEach((e) => {
       const st = S.sec[e.sec];
       const cls = [];
-      if (st.occ != null || st.falseOcc) cls.push("occ");
+      if (st.occ != null || st.falseOcc || st.wagons) cls.push("occ");
       if (st.lock) {
         const rs = S.routes[st.lock];
         cls.push(rs && rs.state === "setting" ? "setting" : "locked");
@@ -193,6 +193,14 @@
     }
     for (const [id, e] of Object.entries(endEls)) e.g.classList.toggle("target", !!(pickEnds && pickEnds.ends.has(id)));
     trainLayer.innerHTML = "";
+    Object.entries(S.sec).forEach(([id, st]) => {
+      if (!st.wagons || st.occ != null) return;
+      const [x, y] = secMid(id);
+      const g = el("g", { class: "train wagons", transform: `translate(${x},${y})` }, trainLayer);
+      el("rect", { x: -18, y: -9, width: 36, height: 17, rx: 2 }, g);
+      el("text", { x: 0, y: 4, "text-anchor": "middle" }, g).textContent = "ваг.";
+      el("title", {}, g).textContent = "Вагони стоять на " + id + " з " + E.fmt(st.wagons.since).slice(0, 5) + " (залишив " + st.wagons.num + ")";
+    });
     S.trains.filter((t) => !t.done).forEach((tr) => {
       const [x, y] = secMid(tr.seq[tr.idx]);
       const ev = tr.eventIdx != null ? S.events[tr.eventIdx] : null;
@@ -226,6 +234,7 @@
   }
   function stopPick(msg) {
     ui.pick = null; pickLayer.innerHTML = ""; document.body.classList.remove("picking");
+    if (!ui.sel) $("rkuCard").classList.remove("open");
     if (msg) toast(msg);
     renderScheme(); renderRku(); renderIndicators();
   }
@@ -254,7 +263,10 @@
     el("line", { x1: g.lx, y1: g.yy, x2: q.x, y2: q.y, class: "pick-line " + ui.pick.mode }, pickLayer);
     el("text", { x: q.x + 6, y: q.y - 6, class: "pick-x " + ui.pick.mode }, pickLayer).textContent = "✕";
   });
-  svg.addEventListener("click", (ev) => { if (ui.pick && ev.target === svg) toast("Виберіть кінцевий світлофор або колію. Esc — відміна набору."); });
+  svg.addEventListener("click", (ev) => {
+    if (ui.pick && ev.target === svg) toast("Виберіть кінцевий світлофор або колію. Esc — відміна набору.");
+    else if (!ui.pick && ev.target === svg) select(null);
+  });
 
   function onObjectClick(o, ev) {
     if (ev) ev.stopPropagation();
@@ -263,7 +275,7 @@
       if (o.kind === "sec") return finishPick(o.id);
       return;
     }
-    select(o);
+    select(o, ev);
   }
 
   // ---------- indicators (handbook table 2.21) ----------
@@ -271,8 +283,11 @@
     const S = sim.S;
     const kit = (k) => { const rid = S.kits[k]; if (!rid) return null; const st = S.routes[rid]; return st ? Math.max(0, st.until - S.time) : null; };
     [["indFree", "free", "ВІЛЬН."], ["indTrain", "train", "ПОЇЗД."], ["indShunt", "shunt", "МАНЕВР."]].forEach(([id, k, name]) => {
-      const left = kit(k); $(id).classList.toggle("lit", left != null); $(id).textContent = left != null ? name + " " + left + "с" : name;
+      const left = kit(k); $(id).classList.toggle("lit", left != null); $(id).querySelector(".ilc").textContent = left != null ? name + " " + left : name;
     });
+    $("indCancel").classList.toggle("lit", Object.values(S.kits).some(Boolean));
+    $("modeMain").classList.toggle("lit-g", S.mode === "main"); $("modeRes").classList.toggle("lit-g", S.mode === "reserve"); $("modeAux").classList.toggle("lit", S.mode === "aux");
+    $("indFuse").classList.toggle("lit", S.faults.fuse); $("indSlow").classList.toggle("lit", S.faults.slow); $("indKv").classList.toggle("lit", S.faults.kv);
     $("indIR").classList.toggle("lit", Object.values(S.sec).some((s) => s.artUntil != null));
     $("indCut").classList.toggle("lit", Object.values(S.sw).some((s) => s.lost));
     $("indAuto").textContent = S.auto ? "АВТО" : "РУЧНЕ";
@@ -285,7 +300,23 @@
 
   // ---------- panels ----------
   function toast(msg, kind) { const t = $("toast"); t.textContent = msg; t.className = "toast" + (kind ? " " + kind : ""); }
-  function select(o) { ui.sel = o; renderRku(); renderScheme(); $("rkuCard").classList.toggle("open", !!o); }
+  // the object panel opens next to the clicked object (bottom sheet on phones)
+  document.body.appendChild($("rkuCard"));
+  function placePanel(x, y) {
+    const card = $("rkuCard");
+    if (window.innerWidth < 720) { card.style.left = card.style.top = ""; return; }
+    const w = 340, h = Math.min(card.offsetHeight || 300, window.innerHeight * 0.7);
+    let left = x + 18, top = y - 20;
+    if (left + w > window.innerWidth - 8) left = x - w - 18;
+    if (top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+    card.style.left = Math.max(8, left) + "px"; card.style.top = Math.max(8, top) + "px";
+  }
+  function select(o, ev) {
+    ui.sel = o; renderRku(); renderScheme();
+    const card = $("rkuCard");
+    card.classList.toggle("open", !!o || !!ui.pick);
+    if (o && ev && ev.clientX != null) placePanel(ev.clientX, ev.clientY);
+  }
   $("rkuClose").onclick = () => select(null);
   const routeStateName = { setting: "набір: стрілки переводяться", set: "замкнено, світлофор закритий", open: "світлофор відкрито", used: "рухомий склад у маршруті", cancelling: "розмикання з витримкою…" };
   const B = (c, a, label, opts) => `<button data-c="${c}" data-a="${esc(a)}"${opts && opts.danger ? ' class="danger"' : ""}${opts && opts.dis ? " disabled" : ""}${opts && opts.title ? ` title="${esc(opts.title)}"` : ""}>${label}</button>`;
@@ -420,6 +451,20 @@
     } catch (e) { /* audio unavailable */ }
   }
   sim.on((e) => { if (e.approach) beep(); });
+  const radio = window.Radio.init(() => sim, {});
+  sim.on((e) => radio.onEvent(e));
+
+  // accident: show the cause at the top left and restart the day from 00:00
+  function handleAccident() {
+    const a = sim.S.accident; if (!a) return;
+    $("accText").textContent = " Доба " + a.day + ", " + E.fmt(a.time).slice(0, 5) + ". " + a.text + ". Добу перезапущено з 00:00.";
+    $("accident").hidden = false;
+    sim.reset({ auto: $("chkAuto").checked, endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
+    sim.log("error", "Перезапуск після аварії: " + a.text);
+    ui.sel = null; ui.selTrain = null; ui.selEvent = null; if (ui.pick) stopPick();
+    setRunning(true); refresh(true);
+  }
+  $("accClose").onclick = () => { $("accident").hidden = true; };
 
   // recommendation: which routes to set for an event
   function advice(ev) {
@@ -455,7 +500,7 @@
       tb.innerHTML = S.events.map((ev, i) => {
         const a = advice(ev);
         const job = ev.ev.job && P.shuntingJobs[ev.ev.job];
-        const dir = job ? job.name : P.directionLabel[ev.ev.direction] || ev.ev.direction;
+        const dir = job ? job.name : (P.directionLabel[ev.ev.direction] || ev.ev.direction) + (ev.ev.action === "stand" ? " · стоянка " + ev.ev.stopMin + " хв" : ev.ev.stopMin ? " · зуп. " + ev.ev.stopMin + " хв" : "");
         return `<tr class="ev${ev.ev.type === "shunting" ? " sh" : ""}" data-i="${i}"><td>${esc(ev.ev.time)}</td><td><b>${esc(ev.ev.train)}</b></td><td>${typeShort[ev.ev.type] || ""}</td><td class="dircell" title="${esc(dir)}">${esc(dir)}</td><td>${a ? esc(a.track.replace("колія ", "")) : job ? esc(job.start.replace(/П.*/, "")) : "—"}</td><td class="stc"></td><td><input type="number" min="0" max="600" value="${ev.delayMin}" data-d="${i}" aria-label="Затримка поїзда ${esc(ev.ev.train)}, хв"></td></tr>`;
       }).join("");
     }
@@ -676,6 +721,25 @@
   $("selLevel").onchange = (e) => { src.level = e.target.value; applySource("Інтенсивність змінено, графік перегенеровано."); };
   $("btnGen").onclick = () => { src.seed = Math.max(1, Math.floor(+$("inSeed").value || 1)); applySource("Графік згенеровано, номер варіанта " + src.seed + "."); };
   $("btnNewSeed").onclick = () => { src.seed = 1 + Math.floor(rnd() * 99999); $("inSeed").value = src.seed; applySource("Новий випадковий графік, номер варіанта " + src.seed + "."); };
+  document.querySelectorAll("[data-m]").forEach((b) => b.addEventListener("click", () => {
+    const m = b.dataset.m;
+    if (m === "aux" && sim.S.mode !== "aux") confirmCmd("ДУ", "Допоміжне управління", "Увімкнути допоміжне управління: маршрути задаються лише після індивідуального переведення стрілок; «Допоміжне переведення» діє навіть під замкнутим маршрутом. Помилка ДСП може призвести до сходу або зіткнення.", true, () => sim.setMode("aux"));
+    else { sim.setMode(m); refresh(); }
+  }));
+  document.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { sim.toggleFault(b.dataset.f); refresh(); }));
+  function setTheme(t) {
+    document.body.classList.toggle("grey-console", t === "grey");
+    [...$("themeSeg").children].forEach((x) => x.classList.toggle("on", x.dataset.t === t));
+    try { localStorage.setItem("dsp-theme", t); } catch (e) { /* storage unavailable */ }
+  }
+  $("themeSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setTheme(b.dataset.t); });
+  try { const t = localStorage.getItem("dsp-theme"); if (t) setTheme(t); } catch (e) { /* storage unavailable */ }
+  $("btnConsole").onclick = () => {
+    const on = document.body.classList.toggle("console-only");
+    $("btnConsole").classList.toggle("on", on);
+    $("btnConsole").textContent = on ? "▤ Показати все" : "▣ Лише пульт";
+    drawGraph(true);
+  };
   $("btnHelp").onclick = () => { $("help").hidden = false; $("helpClose").focus(); };
   $("helpClose").onclick = () => { $("help").hidden = true; };
   $("help").addEventListener("click", (e) => { if (e.target === $("help")) $("help").hidden = true; });
@@ -700,10 +764,11 @@
     if (ui.running && !sim.S.paused) {
       acc += dt * ui.speed;
       let n = 0;
-      while (acc >= 1 && n < 900) { sim.step(); acc -= 1; n++; }
-      if (sim.S.paused) setRunning(false);
+      while (acc >= 1 && n < 900 && !sim.S.paused) { sim.step(); acc -= 1; n++; }
+      if (sim.S.accident) { acc = 0; handleAccident(); }
+      else if (sim.S.paused) setRunning(false);
     }
-    if (now - lastRender > 120) { lastRender = now; refresh(); }
+    if (now - lastRender > 120) { lastRender = now; refresh(); radio.tick(); }
     requestAnimationFrame(frame);
   }
   // zoom: width of the diagram in px (0 = fit the window)

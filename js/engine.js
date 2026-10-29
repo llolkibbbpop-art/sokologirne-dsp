@@ -150,10 +150,11 @@
         endMode: o.endMode || "newday", paused: false,
         shuntingEnabled: o.shuntingEnabled !== undefined ? o.shuntingEnabled : P.shuntingEnabledByDefault,
         sw: {}, sec: {}, sig: {}, routes: {}, pseudo: {}, trains: [], log: [], delays: o.delays || {}, nextTrainId: 1,
-        pendingTests: [], kits: { free: null, shunt: null, train: null }, counters: { inv: 0, aux: 0, art: 0 }, lastDir: null
+        pendingTests: [], kits: { free: null, shunt: null, train: null }, counters: { inv: 0, aux: 0, art: 0 }, lastDir: null,
+        mode: "main", faults: { fuse: false, slow: false, kv: false }, accident: null
       };
       Object.keys(D.switches).forEach((id) => (S.sw[id] = { pos: "+", lockedInd: false, blocked: false, moving: null, lost: false }));
-      Object.keys(D.sections).forEach((id) => (S.sec[id] = { occ: null, lock: null, blocked: false, artUntil: null, falseOcc: false }));
+      Object.keys(D.sections).forEach((id) => (S.sec[id] = { occ: null, lock: null, blocked: false, artUntil: null, falseOcc: false, wagons: null }));
       Object.keys(D.signals).forEach((id) => (S.sig[id] = { open: false, aspect: null, inv: null, blocked: false }));
       S.events = buildEvents();
       log("sys", "Початок модельної доби. Режим: " + (S.auto ? "автодиспетчер" : "ручне керування"));
@@ -161,7 +162,7 @@
     }
 
     // ---------------------------------------------------------------- interlocking checks
-    const secBusy = (st) => st.occ != null || st.falseOcc;
+    const secBusy = (st) => st.occ != null || st.falseOcc || !!st.wagons;
     function switchLockedBy(id) {
       const sw = D.switches[id], sec = S.sec[sw.section];
       if (S.sw[id].lockedInd) return "положення стрілки " + id + " заблоковано";
@@ -178,8 +179,12 @@
       if (S.routes[rid]) return "Маршрут " + rid + " вже задано";
       if (S.sig[R.from].blocked) return "Світлофор " + R.from + " заблоковано";
       if (Object.values(S.routes).some((r) => r.state === "setting")) return "Йде встановлення іншого маршруту — зачекайте кілька секунд";
+      const lastSec = R.sections[R.sections.length - 1];
       for (const s of R.sections) {
         const st = S.sec[s];
+        const toOccupiedTrack = R.type === "shunt" && s === lastSec && D.sections[s].kind === "track" && !st.lock && !(st.occ != null && isMoving(st.occ));
+        if (toOccupiedTrack && (st.occ != null || st.wagons)) continue;
+        if (st.wagons) return "Секція " + s + " зайнята вагонами";
         if (st.occ != null) return "Секція " + s + " зайнята (" + trainLabel(st.occ) + ")";
         if (st.falseOcc) return "Секція " + s + " показує зайнятість (несправність)";
         if (st.lock) return "Секція " + s + " замкнена у ворожому маршруті " + st.lock;
@@ -206,6 +211,10 @@
       if (err) { log("error", "Маршрут " + rid + ": відмова — " + err); return { ok: false, err }; }
       const R = D.routes[rid];
       mode = R.type === "shunt" ? "shunt" : mode === "shunt" ? "shunt" : "train";
+      if (S.mode === "aux") {
+        const wrong = Object.entries(R.switches).filter(([id, pos]) => S.sw[id].pos !== pos).map(([id]) => id);
+        if (wrong.length) { const err = "допоміжне управління: спершу переведіть стрілки " + wrong.join(", ") + " індивідуально"; log("error", "Маршрут " + rid + ": " + err); return { ok: false, err }; }
+      }
       let moves = 0;
       for (const [id, pos] of Object.entries(R.switches)) {
         if (S.sw[id].pos !== pos) { S.sw[id].moving = { to: pos, until: S.time + SWITCH_SEC }; moves++; }
@@ -228,8 +237,12 @@
       const R = D.routes[rid];
       for (const [id, pos] of Object.entries(R.switches))
         if (S.sw[id].pos !== pos || S.sw[id].lost) { const err = "немає контролю стрілки " + id + " у положенні маршруту"; log("error", "Відкриття " + sig + ": відмова — " + err); return { ok: false, err }; }
-      for (const s of R.sections)
+      const lastSec = R.sections[R.sections.length - 1];
+      for (const s of R.sections) {
+        // a shunting route may end on an occupied track (coupling to wagons or a standing train)
+        if (R.type === "shunt" && s === lastSec && D.sections[s].kind === "track" && !S.sec[s].falseOcc && !(S.sec[s].occ != null && isMoving(S.sec[s].occ))) continue;
         if (secBusy(S.sec[s])) { const err = "секція " + s + " зайнята"; log("error", "Відкриття " + sig + ": відмова — " + err); return { ok: false, err }; }
+      }
       const mode = S.routes[rid].mode;
       S.routes[rid].state = "open";
       S.sig[sig].open = true; S.sig[sig].aspect = mode === "shunt" ? "white" : "green";
@@ -290,9 +303,16 @@
       if (cur.moving) return { ok: false, err: "стрілка вже переводиться" };
       const sec = S.sec[D.switches[id].section];
       if (aux) {
-        if (cur.lockedInd || sec.lock) { const err = "стрілка замкнена"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
-        if (sec.occ != null) { const err = "на секції фактично стоїть рухомий склад"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
+        if (cur.lockedInd) { const err = "положення стрілки заблоковано"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
+        if (sec.lock && S.mode !== "aux") { const err = "стрілка замкнена в маршруті (у режимі ДОПОМІЖ. переведення можливе, але відповідальність — на ДСП)"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
+        if (sec.occ != null) { const err = "під стрілкою рухомий склад — фізично неможливо"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
         S.counters.aux++;
+        if (sec.lock) {
+          // the route over this switch loses control: its signal closes; a train already in the route is in danger
+          const rid = sec.lock, st = S.routes[rid];
+          if (st && st.state === "open") { closeSignalsOf(rid); st.state = "set"; log("warn", "Світлофор " + routeDef(rid).from + " перекрито: втрата контролю стрілки " + id); }
+          log("warn", "УВАГА: стрілку " + id + " переведено під замкнутим маршрутом " + rid);
+        }
       } else {
         const l = switchLockedBy(id);
         if (l) { log("error", "Переведення " + id + ": відмова — " + l); return { ok: false, err: l }; }
@@ -301,6 +321,9 @@
       log("cmd", (aux ? "Допоміжне переведення" : "Переведення") + " стрілки " + id + " в " + (pos === "+" ? "плюс" : "мінус"));
       return { ok: true };
     }
+    function isMoving(trId) { const t = S.trains.find((x) => x.id === trId); return !!t && !t.done && !t.parked && t.idx < t.seq.length - 1; }
+    function setMode(m) { S.mode = m; log("cmd", "Режим управління: " + ({ main: "ОСНОВНИЙ", reserve: "РЕЗЕРВНИЙ", aux: "ДОПОМІЖНИЙ" }[m])); return { ok: true }; }
+    function toggleFault(k) { S.faults[k] = !S.faults[k]; log(S.faults[k] ? "warn" : "cmd", ({ fuse: "ПРЕДОХР.", slow: "ЗАМЕДЛ. ПУТ. ПОВТ.", kv: "РЕЗЕРВ. КВ." }[k]) + (S.faults[k] ? ": індикатор увімкнено (навчальна несправність)" : ": норма")); return { ok: true }; }
     function toggleSwitchLock(id) { const s = S.sw[id]; s.lockedInd = !s.lockedInd; log("cmd", "Положення стрілки " + id + (s.lockedInd ? " заблоковано (замок)" : " розблоковано")); return { ok: true }; }
     function toggleSwitchBlock(id) { const s = S.sw[id]; s.blocked = !s.blocked; log("cmd", "Стрілку " + id + (s.blocked ? " заблоковано" : " розблоковано")); return { ok: true }; }
     function toggleSectionBlock(id) { const s = S.sec[id]; s.blocked = !s.blocked; log("cmd", "Ділянку " + id + (s.blocked ? " заблоковано" : " розблоковано")); return { ok: true }; }
@@ -377,7 +400,7 @@
       const chain = Array.isArray(o.start) ? o.start : [o.start];
       const tr = {
         id: S.nextTrainId++, num: o.num, type: o.type, parity: o.parity, eventIdx: o.eventIdx,
-        pref: o.pref, stopSec: o.stopSec || 0, seq: chain.slice(), lim: chain.map(() => 0), idx: 0, tIn: 0,
+        pref: o.pref, stopSec: o.stopSec || 0, seq: chain.slice(), lim: chain.map(() => 0), req: chain.map(() => null), idx: 0, tIn: 0,
         occ: [chain[0]], len: o.len || blocksFor(o.type, o.num), nextSignal: null, wait: null, waitSec: 0, done: false,
         status: o.type === "shunting" ? "стоїть" : "на підході", shunt: o.shunt || null, loco: !!o.loco, appearedAt: S.time,
         marks: { appear: S.time }
@@ -385,7 +408,7 @@
       S.sec[chain[0]].occ = tr.id;
       S.trains.push(tr);
       updateNextSignal(tr);
-      log("train", (tr.type === "shunting" ? "Маневровий склад " : "Поїзд ") + tr.num + " (" + typeName(tr.type) + ", " + tr.len + " бл.) " + (tr.loco ? "поставлено на " : "з'явився на ") + chain[0], { approach: !tr.loco && tr.type !== "shunting" });
+      log("train", (tr.type === "shunting" ? "Маневровий склад " : "Поїзд ") + tr.num + " (" + typeName(tr.type) + ", " + tr.len + " бл.) " + (tr.loco ? "поставлено на " : "з'явився на ") + chain[0], { approach: !tr.loco && tr.type !== "shunting", evt: "spawn", trId: tr.id });
       return tr;
     }
     function spawnLoco(sec) {
@@ -475,7 +498,13 @@
       const R = routeDef(rid);
       const add = (lead ? [lead] : []).concat(R.sections);
       const limit = R.invite ? 20 : R.minus && tr.type !== "shunting" ? (P.divergingKmh || 50) : 0;
-      add.forEach(() => tr.lim.push(limit));
+      add.forEach((sec) => {
+        tr.lim.push(limit);
+        // which switch positions this movement relies on in each switch section
+        const req = {};
+        Object.entries(R.switches || {}).forEach(([id, pos]) => { if (D.switches[id].section === sec) req[id] = pos; });
+        tr.req.push(Object.keys(req).length ? req : null);
+      });
       tr.seq.push(...add);
       S.routes[rid].state = "used";
       closeSignalsOf(rid);
@@ -484,7 +513,7 @@
       if (D.signals[sig].kind === "exit" && tr.type !== "shunting") { tr.passedAt = S.time; tr.marks.depart = S.time; }
       if (D.signals[sig].kind === "entry" && tr.type !== "shunting") tr.marks.arrive = S.time;
       tr.wait = null; tr.status = "рух";
-      log("train", trainLabel(tr.id) + " проходить " + sig + (R.invite ? " за запрошувальним сигналом (≤20 км/год)" : " · " + rid));
+      log("train", trainLabel(tr.id) + " проходить " + sig + (R.invite ? " за запрошувальним сигналом (≤20 км/год)" : " · " + rid), { evt: "pass", sigKind: D.signals[sig].kind, sig, trId: tr.id });
     }
 
     function stepTrain(tr) {
@@ -502,6 +531,20 @@
       const atEnd = tr.idx === tr.seq.length - 1;
       const atTrackEnd = atEnd && info.kind === "track";
       if (atTrackEnd && tr.stopSec && !tr.loco && !tr.shunt) need += tr.stopSec;
+      // shunting plan: leave wagons here, or couple the wagons standing here
+      const cur = tr.shunt && atEnd && tr.shunt.plan[tr.shunt.step];
+      if (cur && cur.leave) {
+        S.sec[h].wagons = { num: tr.num, since: S.time };
+        tr.shunt.step++; updateNextSignal(tr);
+        log("train", "Маневровий " + tr.num + ": вагони залишено на " + h);
+        return;
+      }
+      if (cur && cur.couple) {
+        if (S.sec[h].wagons) log("train", "Маневровий " + tr.num + ": вагони причеплено на " + h);
+        S.sec[h].wagons = null; tr.len = 2;
+        tr.shunt.step++; updateNextSignal(tr);
+        return;
+      }
       const waitStep = tr.shunt && atEnd && (tr.shunt.plan[tr.shunt.step] || {}).wait;
       if (waitStep) need += waitStep;
       if (tr.tIn < need) return;
@@ -511,7 +554,7 @@
           tr.occ.forEach(releaseSection); tr.occ = [];
           tr.done = true; tr.doneAt = S.time; tr.marks.gone = S.time; tr.status = tr.shunt ? "маневри завершено" : "проследував";
           finishEvent(tr);
-          log("train", tr.shunt ? "Маневровий склад " + tr.num + " завершив маневри на " + h : "Поїзд " + tr.num + " віддалився з " + h);
+          log("train", tr.shunt ? "Маневровий склад " + tr.num + " завершив маневри на " + h : "Поїзд " + tr.num + " віддалився з " + h, { evt: "gone", trId: tr.id });
           return;
         }
         let sig = tr.nextSignal, rid = sig && routeFromSignal(sig, ["open"]), lead = null;
@@ -551,14 +594,21 @@
       }
       const next = tr.seq[tr.idx + 1];
       const ns = S.sec[next];
-      if ((ns.occ != null && ns.occ !== tr.id) || (ns.falseOcc && tr.lim[tr.idx + 1] !== 20)) {
+      // a switch that is not where this movement's route set it — derailment or collision
+      const req = tr.req[tr.idx + 1];
+      if (req) {
+        const bad = Object.entries(req).find(([id, pos]) => S.sw[id].pos !== pos || S.sw[id].moving);
+        if (bad) { accident(tr, bad[0]); return; }
+      }
+      const coupling = tr.type === "shunting" && ns.wagons && tr.idx + 1 === tr.seq.length - 1;
+      const ontoStanding = tr.type === "shunting" && ns.occ != null && ns.occ !== tr.id && !isMoving(ns.occ) && tr.idx + 1 === tr.seq.length - 1 && D.sections[next].kind === "track";
+      if (((ns.occ != null && ns.occ !== tr.id) && !ontoStanding) || (ns.wagons && !coupling) || (ns.falseOcc && tr.lim[tr.idx + 1] !== 20)) {
         if (!tr.wait) { tr.wait = "секція " + next + " зайнята"; log("warn", trainLabel(tr.id) + ": " + tr.wait); }
         tr.waitSec++; return;
       }
       tr.wait = null;
       tr.idx++; tr.tIn = 0;
-      ns.occ = tr.id;
-      tr.occ.push(next);
+      if (!ontoStanding) { ns.occ = tr.id; tr.occ.push(next); }
       const ni = D.sections[next];
       while (tr.occ.length > tr.len) releaseSection(tr.occ.shift());
       if (ni.kind === "track" && tr.idx === tr.seq.length - 1) {
@@ -574,6 +624,30 @@
       }
       tr.status = ni.kind === "exit" ? "відправлено" : ni.kind === "track" ? "на колії " + (ni.group || next).replace("П", "") : "рух по " + next;
       updateNextSignal(tr);
+    }
+
+    // An accident stops the simulation; the UI shows the cause and restarts the day.
+    function accident(tr, swId) {
+      const sw = D.switches[swId], st = S.sw[swId];
+      // sections along the branch the switch now points to (a few blocks ahead)
+      const legNode = st.pos === "+" ? sw.plus : sw.minus;
+      const secs = new Set([sw.section]);
+      let frontier = [[sw.node, legNode]];
+      for (let d = 0; d < 4 && frontier.length; d++) {
+        const nf = [];
+        frontier.forEach(([from, to]) => {
+          secs.add(D.edgeMap[ek(from, to)].sec);
+          (D.adj[to] || []).filter((n) => n !== from).forEach((n) => nf.push([to, n]));
+        });
+        frontier = nf;
+      }
+      const other = S.trains.find((t) => t !== tr && !t.done && t.occ.some((x) => secs.has(x)));
+      const what = other
+        ? "ЗІТКНЕННЯ: " + trainLabel(tr.id) + " пройшов стрілку " + swId + ", переведену перед ним, і зіткнувся з " + (other.type === "shunting" ? "маневровим складом " : "поїздом ") + other.num
+        : "СХІД З РЕЙОК: " + trainLabel(tr.id) + " пройшов стрілку " + swId + " у неправильному положенні (стрілку переведено перед поїздом)";
+      S.accident = { day: S.day, time: S.time, text: what, sw: swId };
+      S.paused = true;
+      log("error", what);
     }
 
     function finishEvent(tr) {
@@ -684,7 +758,12 @@
       return late > 0 ? late : 0;
     }
     function nextEvent() {
-      return S.events.filter((e) => e.status !== "passed" && e.status !== "config")
+      const arrived = (e) => {
+        if (e.status !== "active") return false;
+        const tr = S.trains.find((t) => t.id === e.trainId);
+        return !tr || e.ev.type === "shunting" || D.sections[tr.seq[tr.idx]].kind !== "approach";
+      };
+      return S.events.filter((e) => e.status !== "passed" && e.status !== "config" && !arrived(e))
         .map((e) => ({ e, at: e.time + e.delayMin * 60 })).sort((a, b) => a.at - b.at)[0] || null;
     }
     function isIdle() {
@@ -700,7 +779,7 @@
     return {
       setSchedule, D, get S() { return S; }, reset, step, run, setRoute, openSignal, closeSignal, cancelRoute, moveSwitch,
       toggleSwitchLock, toggleSwitchBlock, toggleSectionBlock, toggleSignalBlock, artRelease, inviteSignal, setFault,
-      spawnLoco, removeLoco, setDelay, addTestTrain, checkRoute, routesFrom, routeDef,
+      spawnLoco, removeLoco, setMode, toggleFault, setDelay, addTestTrain, checkRoute, routesFrom, routeDef,
       nextEvent, isIdle, lateMin, blocksFor, fmt, on: (f) => listeners.push(f), routeFromSignal, buildEvents: () => (S.events = buildEvents()),
       log: (k, t) => log(k, t), KIT_NAME
     };

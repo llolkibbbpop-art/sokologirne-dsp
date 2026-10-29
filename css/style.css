@@ -125,6 +125,7 @@ body.picking .scheme-wrap svg { cursor: crosshair; }
 .train rect { fill: #1d1d1d; stroke: #fff; stroke-width: 1.2; }
 .train.late rect { fill: #a3140f; stroke: #ffb0ab; }
 .train.test rect { fill: #10305a; }
+.train.wagons rect { fill: #3a1a10; stroke: #ff8a3d; }
 .train text { fill: #fff; font: 700 11.5px var(--font-mono); }
 .train { cursor: pointer; }
 
@@ -304,3 +305,71 @@ footer { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 90ch
 @media (max-width: 720px) { #graph { height: 210px; } }
 .dircell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 tr.ev.sh td { color: #e9d27a; }
+
+/* ---------- indicator strip as on the АРМ figure: caption above a small lamp ---------- */
+.indbar { gap: 8px 22px; align-items: flex-start; }
+.igrp { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.igcap { color: #ededed; font: 600 10.5px var(--font-mono); letter-spacing: .04em; min-height: 14px; display: flex; gap: 6px; align-items: center; }
+.irow { display: flex; gap: 10px; align-items: flex-end; }
+.irow.center { justify-content: center; }
+.il { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 0; padding: 0; color: #ededed; }
+.il.btn { cursor: pointer; }
+.il .ilc { font: 600 10px var(--font-mono); letter-spacing: .03em; white-space: nowrap; }
+.il i { display: block; width: 34px; height: 9px; border: 1.5px solid #f0f0f0; background: transparent; }
+.il.lit i { background: #ff2b2b; }
+.il.lit-g i { background: #29c43f; }
+.il.blinky.lit i { animation: blink 1s steps(2) infinite; }
+.il.btn:focus-visible i { outline: 2px solid var(--accent); }
+.dir-arrow { min-width: 34px; font-size: 14px; padding: 0 6px; }
+
+/* ---------- object panel as a popover next to the object ---------- */
+.rku-card { position: fixed; z-index: 45; width: 340px; max-height: 70vh; overflow-y: auto; margin: 0 !important; box-shadow: 0 10px 30px rgba(0,0,0,.55); border-color: var(--accent); }
+.rku-card:not(.open) { display: none; }
+.rku-card .sheet-close { display: inline-block; }
+
+/* ---------- accident banner (top left) ---------- */
+.accident { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 60; max-width: min(560px, calc(100vw - 24px));
+  background: #3a0d0b; color: #ffd9d6; border: 2px solid #ff2b2b; border-radius: 6px; padding: 10px 40px 10px 12px; font-size: 13.5px; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.accident b { color: #ff5a4e; margin-right: 6px; letter-spacing: .08em; }
+.accident button { position: absolute; right: 6px; top: 6px; padding: 1px 8px; }
+
+/* ---------- radio window ---------- */
+.radio-win { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 50; width: min(520px, calc(100vw - 32px)); height: min(460px, 70vh);
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; box-shadow: 0 12px 34px rgba(0,0,0,.6); }
+.radio-win[hidden] { display: none !important; }
+.radio-head { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: move; user-select: none; }
+.radio-head .hint { flex: 1; font-size: 11.5px; }
+.radio-body { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; min-height: 0; flex: 1; }
+.radio-who input { width: 140px; }
+.radio-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.radio-tabs button { padding: 2px 8px; font-size: 12px; }
+.radio-live, .radio-journal { flex: 1; min-height: 0; overflow-y: auto; font-size: 12.5px; }
+.radio-journal table { font-size: 12px; }
+.radio-journal td { white-space: normal; }
+.rmsg { display: grid; grid-template-columns: 44px 92px 1fr; gap: 2px 8px; padding: 5px 4px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.rmsg .rt { color: var(--muted); font-family: var(--font-mono); }
+.rmsg .rw { color: var(--muted); }
+.rmsg.me .rw { color: var(--accent); }
+.rmsg.drv .rw { color: #ffd23f; }
+.rmsg.duty .rw { color: var(--warn); }
+.rmsg .ra { grid-column: 3; display: flex; gap: 6px; flex-wrap: wrap; }
+.rmsg.pending { background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.rmsg.overdue { background: color-mix(in srgb, var(--occ) 14%, transparent); }
+#btnRadio b { color: var(--warn); }
+#btnRadio.alert { border-color: var(--occ); }
+@media (max-width: 720px) {
+  .radio-win { left: 0; right: 0; bottom: 0; width: auto; height: 62vh; border-radius: 12px 12px 0 0; }
+  .rmsg { grid-template-columns: 40px 1fr; }
+  .rmsg .rb, .rmsg .ra { grid-column: 1 / -1; }
+}
+
+/* ---------- grey console (as on the АРМ figure) ---------- */
+body.grey-console { --sch-bg: #5f5f5f; --sch-locked: #c9c9c9; }
+body.grey-console .tube-o.off { stroke: #8a8a8a; }
+body.grey-console .platform { fill: #858585; }
+body.grey-console .blk-label, body.grey-console .note { fill: #efefef; }
+body.grey-console .scheme-wrap { border-color: #4a4a4a; }
+
+/* ---------- console-only mode ---------- */
+body.console-only .banner, body.console-only .tabs, body.console-only .graph-card, body.console-only .cols, body.console-only footer, body.console-only .settings { display: none !important; }
+body.console-only #viewHist { display: none !important; }

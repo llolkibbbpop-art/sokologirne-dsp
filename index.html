@@ -19,6 +19,8 @@
     <span class="seg" id="speedSeg"><button data-s="1" class="on">x1</button><button data-s="2">x2</button><button data-s="5">x5</button><button data-s="10">x10</button><button data-s="60">x60</button></span>
     <button id="btnSkip" title="Прокрутити час до появи наступного поїзда">⏭ До події</button>
     <button id="btnReset" class="danger">↺ Скинути добу</button>
+    <button id="btnConsole" title="Залишити тільки пульт (згорнути графік, таблиці, журнал)">▣ Лише пульт</button>
+    <button id="btnRadio" title="Радіо і телефонограми (ІРП, розділ 9)">📻 Радіо <b id="radioBadge"></b></button>
     <button id="btnHelp" class="help-btn" title="Як приймати і відправляти поїзди" aria-label="Довідка">?</button>
   </div>
   <details class="settings" id="settings" open>
@@ -50,14 +52,27 @@
 <section id="viewSim">
   <div class="scheme-wrap" id="schemeWrap">
     <div class="indbar">
-      <div class="ind"><span class="ind-cap">МІСЦЕ УПРАВЛ.</span><span class="lamp-box on">АРМ ДСП</span></div>
-      <div class="ind"><span class="ind-cap">ДОП. УПРАВЛ.</span><span class="lamp-box on" title="Допоміжне управління не ввімкнено">НОРМА</span></div>
-      <div class="ind"><span class="ind-cap">РЕЖИМ</span><span class="lamp-box" id="indAuto">РУЧНЕ</span></div>
-      <div class="ind"><span class="ind-cap">НАПРЯМОК І ТИП</span><span class="lamps"><span class="dir-arrow" id="dirL" title="Зелений — поїзний, жовтий — маневровий маршрут">◄</span><span class="dir-arrow" id="dirR">►</span></span></div>
-      <div class="ind"><span class="ind-cap">ВІДМІНА МАРШРУТУ</span><span class="lamps"><span class="lamp-box red" id="indFree" title="Вільне наближення: витримка 6 с">ВІЛЬН.</span><span class="lamp-box red" id="indTrain" title="Поїзний із зайнятим наближенням: 180 с">ПОЇЗД.</span><span class="lamp-box red" id="indShunt" title="Маневровий із зайнятим наближенням: 60 с">МАНЕВР.</span></span></div>
-      <div class="ind"><span class="ind-cap">&nbsp;</span><span class="lamps"><span class="lamp-box red blinky" id="indIR" title="Штучне розмикання">ІР</span><span class="lamp-box red" id="indCut" title="Втрата контролю стрілки">РОЗРІЗ СТР.</span></span></div>
-      <div class="ind"><span class="ind-cap">ЛІЧИЛЬНИКИ</span><span class="counters" title="Запрошувальний / допоміжне переведення / штучне розмикання">ЗС <b id="cntInv">0</b> · ДП <b id="cntAux">0</b> · ШР <b id="cntArt">0</b></span></div>
-      <div class="ind zoom"><span class="ind-cap">МАСШТАБ</span><span class="seg" id="zoomSeg"><button data-z="-1" aria-label="Зменшити">−</button><button data-z="0" title="Вся станція">▭</button><button data-z="1" aria-label="Збільшити">+</button></span></div>
+      <div class="igrp"><span class="igcap">РЕЖИМ УПРАВЛ.</span><div class="irow">
+        <button class="il btn" id="modeMain" data-m="main" title="Основний комп'ютер АРМ"><span class="ilc">ОСНОВН.</span><i></i></button>
+        <button class="il btn" id="modeRes" data-m="reserve" title="Резервний комп'ютер АРМ (керування без змін)"><span class="ilc">РЕЗЕРВН.</span><i></i></button>
+        <button class="il btn" id="modeAux" data-m="aux" title="Допоміжне управління: стрілки переводяться індивідуально; допоміжне переведення можливе навіть під замкнутим маршрутом — відповідальність на ДСП"><span class="ilc">ДОПОМІЖ.</span><i></i></button>
+      </div></div>
+      <div class="igrp"><span class="igcap"><span class="dir-arrow" id="dirL" title="Напрямок і тип останнього маршруту: зелений — поїзний, жовтий — маневровий">⇦</span> <span class="dir-arrow" id="dirR">⇨</span></span><div class="irow">
+        <div class="il red" id="indTrain" title="Відміна поїзного маршруту при зайнятому наближенні: 180 с"><span class="ilc">ПОЇЗД.</span><i></i></div>
+        <div class="il red" id="indFree" title="Відміна при вільному наближенні: 6 с"><span class="ilc">ВІЛЬН.</span><i></i></div>
+        <div class="il red" id="indShunt" title="Відміна маневрового маршруту при зайнятому наближенні: 60 с"><span class="ilc">МАНЕВР.</span><i></i></div>
+      </div><div class="irow center"><div class="il red" id="indCancel" title="Горить, поки триває відміна маршруту"><span class="ilc">ВІДМІНА</span><i></i></div></div></div>
+      <div class="igrp"><span class="igcap">&nbsp;</span><div class="irow">
+        <div class="il red blinky" id="indIR" title="Штучне розмикання: блимає під час витримки"><span class="ilc">ІР</span><i></i></div>
+        <button class="il btn red" id="indFuse" data-f="fuse" title="ЗАПОБІЖН. (ПРЕДОХР.) — контроль запобіжників. У навчальному режимі вмикається кліком як несправність; точне значення індикатора в посібнику не описане"><span class="ilc">ЗАПОБІЖН.</span><i></i></button>
+        <button class="il btn red" id="indSlow" data-f="slow" title="УПОВІЛЬН. КОЛ. ПОВТ. (ЗАМЕДЛ. ПУТ. ПОВТ.) — з рисунка пульта; у навчальному режимі вмикається кліком. Точне значення в посібнику не описане"><span class="ilc">УПОВІЛЬН. КОЛ.ПОВТ.</span><i></i></button>
+        <button class="il btn red" id="indKv" data-f="kv" title="РЕЗЕРВ. КВ. — з рисунка пульта; у навчальному режимі вмикається кліком. Точне значення в посібнику не описане"><span class="ilc">РЕЗЕРВ. КВ.</span><i></i></button>
+        <div class="il red" id="indCut" title="Втрата контролю будь-якої стрілки"><span class="ilc">РОЗРІЗ СТР.</span><i></i></div>
+      </div></div>
+      <div class="igrp"><span class="igcap">МІСЦЕ · РЕЖИМ</span><div class="irow"><span class="lamp-box on">АРМ ДСП</span><span class="lamp-box" id="indAuto">РУЧНЕ</span></div></div>
+      <div class="igrp"><span class="igcap">ЛІЧИЛЬНИКИ</span><span class="counters" title="Запрошувальний / допоміжне переведення / штучне розмикання">ЗС <b id="cntInv">0</b> · ДП <b id="cntAux">0</b> · ШР <b id="cntArt">0</b></span></div>
+      <div class="igrp"><span class="igcap">ФОН</span><span class="seg" id="themeSeg"><button data-t="black" class="on">чорний</button><button data-t="grey">сірий</button></span></div>
+      <div class="igrp zoom"><span class="igcap">МАСШТАБ</span><span class="seg" id="zoomSeg"><button data-z="-1" aria-label="Зменшити">−</button><button data-z="0" title="Вся станція">▭</button><button data-z="1" aria-label="Збільшити">+</button></span></div>
     </div>
     <svg id="scheme" viewBox="-165 48 2895 316" aria-label="Нитковий план станції Сокологірне"></svg>
   </div>
@@ -137,6 +152,18 @@
 
 <footer>Топологію змінюють у <code>js/topology.js</code>, графік і модельні параметри у <code>js/schedule.js</code>. Назви блоків (1СП, IП-1…), поділ колій на блоки і довжини поїздів у блоках — модельні. Порожні кружки М1–М22 — маневрові світлофори, якими в моделі не керують.</footer>
 
+<div id="accident" class="accident" hidden role="alert"><b>АВАРІЯ</b><span id="accText"></span><button id="accClose" aria-label="Закрити повідомлення">✕</button></div>
+
+<section id="radio" class="radio-win" hidden aria-label="Радіо і телефонограми">
+  <header class="radio-head" id="radioHead"><b>📻 Радіо · поїзні телефонограми</b><span class="hint">ІРП ЦД-0058, розділ 9</span><button id="radioClose" aria-label="Закрити радіо">✕</button></header>
+  <div class="radio-body">
+    <div class="radio-who"><label>ДСП Сокологірне: <input id="dspName" value="Іваненко" maxlength="20"></label></div>
+    <div class="radio-tabs"><button data-r="live" class="on">Ефір</button><button data-r="jy">Журнал ДУ-47: Якимівка</button><button data-r="jp">Журнал ДУ-47: Партизани</button></div>
+    <div id="radioLive" class="radio-live"></div>
+    <div id="radioJournal" class="radio-journal" hidden></div>
+  </div>
+</section>
+
 <div id="help" class="modal-bg" hidden>
   <div class="modal help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <h3 id="helpTitle">Як працювати на АРМ ДСП</h3>
@@ -166,6 +193,14 @@
     <p>Світлофор → «Відмінити … маршрут» → код пильності. Є три комплекти відміни: <b>ВІЛЬН.</b> — наближення вільне, 6 с; <b>МАНЕВР.</b> — 60 с; <b>ПОЇЗД.</b> — 180 с. Поки комплект зайнятий (індикатор горить і показує секунди), ще одну відміну того ж типу не почати. Код пильності — три цифри, які система показує щоразу нові. Поки увімкнено «Підказувати код», його вписано заздалегідь.</p>
     <h4>Маневрові роботи</h4>
     <p>У графіку їх видно як рядки <b>МН-…</b> (жовті). Генератор дає 5–12 робіт на добу: подача на колію 14 (тягова підстанція ЕЧ-4), тупик 15, колія 10 (ПЧ-4), перестановки 4→6 і 3→I з витягуванням за М6/М2. Коли настає час, локомотив з'являється на ділянці початку, а в «Найближча подія» з'являється покроковий план: який маневровий світлофор відкрити і до якого кінця. Можна й самому поставити локомотив: клацніть ділянку → «Поставити маневровий локомотив».</p>
+    <h4>Радіо і телефонограми (ІРП ЦД-0058, розділ 9)</h4>
+    <p>Кнопка «📻 Радіо» відкриває окреме вікно (його можна перетягувати). Сусідня станція повідомляє про відправлення поїзда до вас (форма 3) — натисніть «Повторити текст», вона відповість «Вірно». Коли ваш поїзд прибув, відправився або пройшов без зупинки, з'являється завдання передати телефонограму за формою 4, 3 або 11: «Передати» → сусід повторює → «Вірно». Невиконане за 3 хв пишеться в журнал. Записи йдуть у журнали ДУ-47 окремо для кожного перегону, номери — з № 1 щодоби. Машиніст викликає, якщо стоїть біля закритого сигналу.</p>
+    <h4>Режим управління і індикатори</h4>
+    <p>ОСНОВН. / РЕЗЕРВН. / ДОПОМІЖ. — у допоміжному режимі маршрути задаються тільки після індивідуального переведення стрілок, а «Допоміжне переведення» спрацьовує навіть під замкнутим маршрутом. Якщо перевести стрілку перед поїздом, що вже рушив за маршрутом, станеться <b>схід з рейок або зіткнення</b>: зліва вгорі з'явиться причина, і доба почнеться з 00:00. Лампи ЗАПОБІЖН., УПОВІЛЬН. КОЛ.ПОВТ., РЕЗЕРВ. КВ. взято з рисунка пульта; у навчальному режимі вони вмикаються кліком як несправність (їхнє точне значення в посібнику не описане).</p>
+    <h4>Вагони в тупиках</h4>
+    <p>Маневрові роботи подають вагони на колії 14, 15 і 10 і залишають їх там (на схемі «ваг.», ділянка червона), доки інша робота їх не прибере. Маневровий маршрут на зайняту колію дозволено.</p>
+    <h4>Вигляд</h4>
+    <p>«▣ Лише пульт» згортає все, крім пульта. ФОН: чорний або сірий (як на рисунку АРМ). Панель об'єкта відкривається поруч з об'єктом.</p>
     <h4>Графік руху</h4>
     <p>Над таблицею: час по горизонталі, Якимівка — Сокологірне — Партизани по вертикалі. Пунктир — план з графіка, суцільна лінія — як поїзд пройшов насправді (оновлюється наживо). Жовті смуги на станції — маневри. Червона вертикаль — поточний час. Кнопки 2/4/8 год, доба, ◄ ► і «Зараз».</p>
     <h4>Несправності і відповідальні команди</h4>
@@ -192,6 +227,7 @@
 <script src="js/generator.js"></script>
 <script src="js/history.js"></script>
 <script src="js/engine.js"></script>
+<script src="js/radio.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>
