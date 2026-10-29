@@ -223,6 +223,7 @@
       if (W.sims[st]) W.sims[st].S.auto = !!auto;
     };
     W.inTransit = () => transit.slice();
+    W.info = (st) => { const sm = W.sims[st]; return { appr: sm.S.trains.filter((t) => !t.done && t.type !== "shunting" && sm.kindOf(t.seq[t.idx], t) === "approach").length }; };
     W.on = (f) => { listeners.push(f); return () => listeners.splice(listeners.indexOf(f), 1); };
     W.station = (st) => window.STATION_DATA[st];
     build();

@@ -930,6 +930,20 @@
       return Object.values(D.routes).filter((r) => r.from === sig && (mode === "shunt" ? r.type === "shunt" : r.type === "train"));
     }
     function setSchedule(src, o) { SCHED = src; reset(o); }
+    // network play: the host sends the state, a remote screen shows it (log lines arrive as increments)
+    function snapshot(fromLog) {
+      const o = {}; for (const k in S) if (k !== "log") o[k] = S[k];
+      return { S: o, logs: S.log.slice(fromLog || 0), logLen: S.log.length };
+    }
+    function ingest(snap, restart) {
+      const log = restart || !S ? [] : S.log;
+      const ev = S && S.events;
+      S = snap.S;
+      if (!S.events) S.events = ev || [];
+      S.log = log.concat(snap.logs || []);
+      if (S.log.length > 3000) S.log.splice(0, S.log.length - 3000);
+      (snap.logs || []).forEach((e) => listeners.forEach((f) => f(e)));
+    }
 
     reset(opts);
     return {
@@ -937,7 +951,7 @@
       toggleSwitchLock, toggleSwitchBlock, toggleSectionBlock, toggleSignalBlock, artRelease, inviteSignal, setFault,
       spawnLoco, removeLoco, setMode, toggleFault, setDelay, addTestTrain, checkRoute, routesFrom, routeDef,
       nextEvent, isIdle, lateMin, blocksFor, fmt, on: (f) => { listeners.push(f); return () => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }; }, routeFromSignal, buildEvents: () => (S.events = buildEvents()), kindOf, findConsist,
-      log: (k, t) => log(k, t), KIT_NAME
+      log: (k, t) => log(k, t), KIT_NAME, snapshot, ingest
     };
   }
 
