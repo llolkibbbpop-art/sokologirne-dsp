@@ -187,7 +187,8 @@
     // lead from section sec to signal sg: first alternative whose sections are free (switches may still need moving)
     function pickLead(sg, sec, trId, needSet) {
       const L = sg.leads[sec] || [];
-      return L.find((l) => l.secs.every((s) => { const st = S.sec[s]; return (st.occ == null || st.occ === trId) && !st.wagons && !st.falseOcc && !st.lock && !st.blocked; }) &&
+      const me = S.trains.find((t) => t.id === trId), mine = (rid) => !!(me && me.ridsUsed && me.ridsUsed.includes(rid));
+      return L.find((l) => l.secs.every((s) => { const st = S.sec[s]; return (st.occ == null || st.occ === trId) && !st.wagons && !st.falseOcc && (!st.lock || mine(st.lock)) && !st.blocked; }) &&
         Object.entries(l.sw).every(([id, pos]) => !S.sw[id].lost && !S.sw[id].blocked && (needSet ? S.sw[id].pos === pos && !S.sw[id].moving : S.sw[id].pos === pos || !switchLockedBy(id)))) || null;
     }
     const findConsist = (id) => Object.keys(S.sec).find((k) => S.sec[k].wagons && S.sec[k].wagons.consist === id);
@@ -583,7 +584,13 @@
       S.routes[rid].state = "used";
       closeSignalsOf(rid);
       if (S.sig[sig].inv) S.sig[sig].inv = null;
-      if (tr.shunt) tr.shunt.step++;
+      (tr.ridsUsed = tr.ridsUsed || []).push(rid); if (tr.ridsUsed.length > 6) tr.ridsUsed.shift();
+      if (tr.shunt) {
+        // the plan moves on only when the DSP gave the route the task asks for
+        const goal = stepGoal(tr), ends = endsOf(goal);
+        if (!goal.sig || !ends.length || R.ends.some((e) => ends.includes(e)) || ends.includes(R.to)) tr.shunt.step++;
+        else log("warn", "Маневровий " + tr.num + ": маршрут " + rid + " не за завданням (потрібен кінець " + ends.join(" або ") + ") — після нього поверніть склад за планом");
+      }
       if (D.signals[sig].kind === "exit" && tr.type !== "shunting") { tr.passedAt = S.time; tr.marks.depart = S.time; }
       if (D.signals[sig].kind === "entry" && tr.type !== "shunting") tr.marks.arrive = S.time;
       tr.wait = null; tr.status = "рух";
@@ -620,7 +627,8 @@
         // the wagons stay; the locomotive alone now occupies only the section where it stands
         tr.occ.filter((x) => x !== h).forEach(releaseSection); tr.occ = [h]; S.sec[h].occ = tr.id;
         tr.shunt.step++; updateNextSignal(tr);
-        log("train", "Маневровий " + tr.num + ": " + (cur.ready ? "состав " + (cur.consist || "") + " виставлено для відправлення на " : "вагони залишено на ") + h);
+        const cid = cur.consist || (c && c.consist);
+        log("train", "Маневровий " + tr.num + ": " + (cur.ready ? "состав " + (cid || "") + " виставлено для відправлення на " : cid ? "состав " + cid + " поставлено на " : "вагони залишено на ") + h);
         return;
       }
       if (cur && cur.couple) {
@@ -781,7 +789,11 @@
           }
           const st = S.sec[job.start];
           if (job.onWagons ? st.occ != null || st.lock : secBusy(st) || st.lock) { if (ev.status !== "waiting") { ev.status = "waiting"; log("delay", "Маневри " + ev.ev.train + " відкладено: ділянка " + job.start + " зайнята"); } continue; }
-          const tr = spawnTrain({ num: ev.ev.train, type: "shunting", parity: null, start: job.start, eventIdx: ev.idx, len: 1, shunt: { plan: job.plan, step: 0, job: ev.ev.job } });
+          // a delivery starts with the cut of wagons already behind the locomotive
+          const iLeave = job.plan.findIndex((x) => x.leave), iCouple = job.plan.findIndex((x) => x.couple);
+          const carry = !job.onWagons && iLeave >= 0 && (iCouple < 0 || iLeave < iCouple);
+          const tr = spawnTrain({ num: ev.ev.train, type: "shunting", parity: null, start: job.start, eventIdx: ev.idx, len: carry ? 2 : 1, shunt: { plan: job.plan, step: 0, job: ev.ev.job } });
+          if (carry) tr.cargo = { len: 2 };
           ev.status = "active"; ev.trainId = tr.id; ev.marks = tr.marks; continue;
         }
         if (ev.ev.action === "depart") {

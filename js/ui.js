@@ -577,12 +577,12 @@
   $("evTable").addEventListener("click", (e) => { const r = e.target.closest("tr.ev"); if (!r) return; openInfo(+r.dataset.i, e.clientX, e.clientY); });
   $("trainBox").addEventListener("change", (e) => { const i = e.target.dataset.d; if (i == null) return; sim.setDelay(+i, Math.max(0, +e.target.value || 0)); refresh(); });
 
-  function stepHtml(st) {
+  function stepHtml(st, sigNow) {
     if (st.wait) return "чекати " + Math.round(st.wait / 60) + " хв";
     if (st.leave) return st.ready ? "виставити состав для відправлення" : "відчепити й залишити вагони";
     if (st.couple) return "причепити вагони";
     if (st.attach) return "причепитися до состава з боку відправлення";
-    const sig = st.sig && st.sig[0] === "@" ? "світлофор " + (st.sig[1] === "L" ? "у бік Берди/лівої горловини" : "у бік правої горловини") + ", що стоїть перед локомотивом" : "<b>" + esc(st.sig) + "</b>";
+    const sig = st.sig && st.sig[0] === "@" && sigNow ? "<b>" + esc(sigNow) + "</b>" : st.sig && st.sig[0] === "@" ? "світлофор " + (st.sig[1] === "L" ? "у бік лівої горловини" : "у бік правої горловини") + ", що стоїть перед локомотивом" : "<b>" + esc(st.sig) + "</b>";
     const end = [].concat(st.end).map(esc).join(" або ");
     return sig + " → «Встановити маневровий маршрут» → кінець <b>" + end + "</b>" + (st.txt ? " (" + esc(st.txt) + ")" : "");
   }
@@ -591,7 +591,9 @@
     if (job) {
       const note = ev.ev.note ? `<div class="adv-note">${esc(ev.ev.note)}</div>` : "";
       if (!job.plan) return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name)}. План складається, коли состав стоятиме на колії.${note}</div>`;
-      const steps = job.plan.map(stepHtml).join("; потім ");
+      const tr = ev.trainId != null ? sim.S.trains.find((t) => t.id === ev.trainId && !t.done) : null;
+      const cur = tr && tr.shunt ? tr.shunt.step : -1;
+      const steps = job.plan.map((st, i) => (i === cur ? "<u>зараз: " + stepHtml(st, tr.nextSignal) + "</u>" : i < cur ? "<s>" + stepHtml(st) + "</s>" : stepHtml(st))).join("; потім ");
       return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name || P.shuntingJobs[ev.ev.job].name)}. Локомотив з'явиться на ділянці <b>${esc(job.start)}</b>. Порядок: ${steps}.${note}</div>`;
     }
     const a = advice(ev); if (!a) return "";
