@@ -25,7 +25,7 @@
     const sim = () => getSim();
     const now = () => sim().S.time;
 
-    function push(m) { m.id = ++R.seq; m.t = now(); R.msgs.push(m); if (R.msgs.length > 200) R.msgs.splice(0, R.msgs.length - 200); render(); }
+    function push(m) { m.id = ++R.seq; m.t = now(); R.msgs.push(m); if (m.kind !== "me" && hooks && hooks.ring) hooks.ring(); if (R.msgs.length > 200) R.msgs.splice(0, R.msgs.length - 200); render(); }
     function journal(side, dir, no, text, who) { R.journal[side].push({ t: now(), dir, no, text, who }); }
 
     // ---------- incoming: the neighbour reports, the DSP must repeat (п. 9.9.10)

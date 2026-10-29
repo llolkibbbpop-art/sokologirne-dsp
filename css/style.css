@@ -1,19 +1,19 @@
 /* Layout: control-room console — header bar, full-width track diagram, three working columns below. */
 :root {
-  --bg: #0d1214;          /* console background */
+  --bg: #000000;          /* console background */
   --panel: #151c1f;
   --panel-2: #1c2529;
   --line: #2b373c;
   --fg: #d8e1e3;
   --muted: #8a9a9f;
-  --accent: #5fb3c9;      /* steel cyan — selection, focus */
+  --accent: #ffffff;      /* selection, focus (white) */
   --track: #6d7d83;       /* free section */
   --route: #3ecf6b;       /* locked train route */
   --shunt: #e8eef0;       /* locked shunting route */
   --occ: #ff4a3d;         /* occupied */
   --warn: #ffb23e;        /* delay */
   --cfg: #b58cff;         /* needs clarification */
-  --hist: #6aa7ff;        /* historical/confirmed */
+  --hist: #d0d0d0;        /* historical/confirmed */
   --sch-bg: #000000;      /* console ground: black, white contours */
   --sch-line: #f0f0f0;    /* section contour */
   --sch-route: #3be05c;   /* contour of a section in a train route */
@@ -479,3 +479,57 @@ table.rsheet td.act { width: 1%; }
 table.rsheet td.who { width: 1%; }
 .radio-win { width: min(640px, calc(100vw - 32px)); height: min(520px, 74vh); }
 .win-title .hint { color: #f0f0f0; }
+
+/* =====================================================================
+   v10: only black/white or grey/white — no blue anywhere (except the real
+   blue aspect of a shunting signal); indicator strip spread evenly;
+   event log as a white sheet
+   ===================================================================== */
+:root { --bg: #000; --panel: #0f0f0f; --panel-2: #1b1b1b; --line: #3d3d3d; --fg: #f2f2f2; --muted: #a9a9a9; --accent: #ffffff; --hist: #d0d0d0; --cfg: #d6b8ff; }
+body.grey-console { --bg: #585858; --panel: #686868; --panel-2: #767676; --line: #9c9c9c; --fg: #ffffff; --muted: #ececec; --accent: #ffffff; --hist: #f0f0f0; --sch-bg: #5f5f5f; }
+body.grey-console .banner { color: #fff; border-color: #d8d8d8; }
+body.grey-console .p-planned { color: #fff; border-color: #eee; }
+body.grey-console .clockbox { background: #4a4a4a; }
+body.grey-console .drop-panel, body.grey-console .rku-card, body.grey-console .radio-win { box-shadow: 0 10px 28px rgba(0,0,0,.35); }
+button.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); }
+.scheme-wrap { background: var(--sch-bg); }
+.tube-o.sel { stroke: #ffffff; stroke-width: 13; }
+.sw-label.sel { fill: #ffffff; text-decoration: underline; }
+.sig.sel .lamp { stroke: #ffffff; stroke-width: 4; }
+.tube-o.target { stroke: #ffffff; stroke-dasharray: 8 4; }
+.sig.target .lamp, .endbtn.target rect, .sig.start .lamp { stroke: #ffffff; stroke-width: 4; }
+.sig.target text, .endbtn.target text { fill: #ffffff; text-decoration: underline; }
+.help-btn { color: var(--fg); border-color: var(--fg); }
+.dp-cap { font-size: 12.5px; color: var(--fg); margin-right: 4px; }
+
+/* indicator strip: groups spread evenly across the whole width */
+.indbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 14px; width: 100%; padding: 8px 14px 4px; }
+.indbar .igrp { flex: 0 1 auto; }
+
+/* white sheets: grey selection, no blue */
+.sheet tr.ev:hover td { background: #f0f0f0; }
+.sheet tr.ev.sel td, .sheet tr.ev.sel.act td, .sheet tr.ev.sel.wait td { background: #d2d2d2; }
+table.rsheet tr.me td.who { color: #000; font-weight: 700; }
+table.sheet button:hover { background: #cfcfcf; border-color: #444; }
+
+/* event log as a sheet */
+.log-wrap { max-height: 560px; }
+.logt td { white-space: normal; vertical-align: top; }
+.logt td.tm { white-space: nowrap; font-family: var(--font-mono); font-size: 12px; }
+.logt td.kd { white-space: nowrap; color: #555; }
+.logt tr.lg-error td { color: #c00000; }
+.logt tr.lg-error td.txt { font-weight: 600; }
+.logt tr.lg-delay td { color: #a04e00; }
+.logt tr.lg-warn td { color: #6b2fb3; }
+.logt tr.lg-cmd td.txt { color: #000; font-weight: 600; }
+.logt tr.lg-auto td { color: #555; }
+.logt tr.lg-sys td { color: #333; font-style: italic; }
+@media (max-width: 720px) { .logt th:nth-child(1), .logt td:nth-child(1) { display: none; } }
+html:has(body.grey-console) { background: #585858; }
+.logt tr.lg-warn td { color: #000; background: #fff4c7; }
+.logt tr.lg-delay td { color: #9a4a00; }
+.sheet tr.ev.cfg td { color: #6d6d6d; font-style: italic; }
+:root { --cfg: #e0e0e0; }
+.cols { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 720px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+body.grey-console .late, body.grey-console .adv-note { color: #ffe0dc; font-weight: 700; }

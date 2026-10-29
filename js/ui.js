@@ -460,7 +460,19 @@
     } catch (e) { /* audio unavailable */ }
   }
   sim.on((e) => { if (e.approach) beep(); });
-  const radio = window.Radio.init(() => sim, {});
+  // radio call: two short tones on every incoming message (neighbour station, driver, duty)
+  function ring() {
+    if (!ui.sound) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.22].forEach((d, k) => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.frequency.value = k ? 1046 : 784; g.gain.value = 0.06; o.connect(g); g.connect(actx.destination);
+        o.start(actx.currentTime + d); o.stop(actx.currentTime + d + 0.16);
+      });
+    } catch (e) { /* audio unavailable */ }
+  }
+  const radio = window.Radio.init(() => sim, { ring });
   sim.on((e) => radio.onEvent(e));
 
   // accident: show the cause at the top left and restart the day from 00:00
@@ -592,6 +604,7 @@
     box.innerHTML = h || "";
   }
 
+  const LOGKIND = { cmd: "команда", train: "поїзд", delay: "затримка", error: "помилка", warn: "увага", auto: "автодисп.", sys: "система" };
   function renderLog(full) {
     const L = sim.S.log, box = $("log");
     if (full) { box.innerHTML = ""; ui.logCount = 0; }
@@ -599,8 +612,9 @@
     for (let i = ui.logCount; i < L.length; i++) {
       const l = L[i];
       if (ui.logFilter !== "all" && !(ui.logFilter === "cmd" ? l.kind === "cmd" : ui.logFilter === "train" ? l.kind === "train" : ui.logFilter === "delay" ? l.kind === "delay" : l.kind === "error" || l.kind === "warn")) continue;
-      const d = document.createElement("div");
-      d.innerHTML = `<span class="t">Д${l.day} ${E.fmt(l.t)}</span><span class="${l.kind}">${esc(l.text)}</span>`;
+      const d = document.createElement("tr");
+      d.className = "lg-" + l.kind;
+      d.innerHTML = `<td class="tm">${dateStr(l.day)}</td><td class="tm">${E.fmt(l.t)}</td><td class="kd">${LOGKIND[l.kind] || esc(l.kind)}</td><td class="txt">${esc(l.text)}</td>`;
       frag.prepend(d);
     }
     const added = L.length - ui.logCount;
@@ -634,7 +648,7 @@
   // ---------- графік руху: time–distance chart, plan dashed, executed solid ----------
   const G = { span: window.innerWidth < 600 ? 2 : 4, follow: true, start: 0, last: 0 };
   [...$("gSpan").children].forEach((x) => x.classList.toggle("on", +x.dataset.h === G.span));
-  const GCOL = { passenger: "#ff5a4e", intercity: "#ff8a3d", electric: "#2fe05a", freight: "#e8eef0", test: "#6aa7ff", shunting: "#ffd23f", household: "#c58cff", reserve: "#6ad8ff" };
+  const GCOL = { passenger: "#ff5a4e", intercity: "#ff8a3d", electric: "#2fe05a", freight: "#e8eef0", test: "#9a9a9a", shunting: "#ffd23f", household: "#ff9fcf", reserve: "#bdbdbd" };
   function drawGraph(force) {
     const S = sim.S, cv = $("graph");
     const nowKey = Math.floor(S.time / 5) + ":" + S.day + ":" + G.span + ":" + G.start + ":" + G.follow;
@@ -644,7 +658,7 @@
     if (!W) return;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const css = getComputedStyle(document.documentElement);
+    const css = getComputedStyle(document.body);
     const col = (v) => css.getPropertyValue(v).trim();
     c.fillStyle = col("--panel"); c.fillRect(0, 0, W, H);
     const L = W < 500 ? 66 : 96, R = 10, top = 26, bot = H - 24;
@@ -777,6 +791,7 @@
     document.body.classList.toggle("grey-console", t === "grey");
     [...$("themeSeg").children].forEach((x) => x.classList.toggle("on", x.dataset.t === t));
     try { localStorage.setItem("dsp-theme", t); } catch (e) { /* storage unavailable */ }
+    drawGraph(true);
   }
   $("themeSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setTheme(b.dataset.t); });
   try { const t = localStorage.getItem("dsp-theme"); if (t) setTheme(t); } catch (e) { /* storage unavailable */ }

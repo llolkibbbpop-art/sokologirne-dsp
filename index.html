@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0d1214">
+<meta name="theme-color" content="#000000">
 <title>АРМ ДСП Сокологірне</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,7 +18,8 @@
       <div class="drop-panel" id="settings" hidden>
         <label title="Якщо увімкнено, маршрути задає система замість вас"><input type="checkbox" id="chkAuto"> Автодиспетчер</label>
         <label title="Код пильності вписується в поле автоматично"><input type="checkbox" id="chkCode" checked> Підказувати код</label>
-        <label title="Короткий звук, коли поїзд вступає на ділянку наближення"><input type="checkbox" id="chkSound" checked> Звук наближення</label>
+        <label title="Звук, коли поїзд вступає на ділянку наближення, і дзвінок на кожне повідомлення по радіо (сусідня станція, машиніст)"><input type="checkbox" id="chkSound" checked> Звукові сигнали</label>
+        <div class="dp-row"><span class="dp-cap">Фон</span><span class="seg" id="themeSeg"><button data-t="black" class="on">чорно-білий</button><button data-t="grey">сіро-білий</button></span></div>
         <label><input type="checkbox" id="chkShunt" checked> Маневрові роботи</label>
         <label>Графік <select id="selSrc"><option value="gen" selected>генератор</option><option value="json">із завдання (JSON)</option></select></label>
         <div id="genCtl" class="dp-col">
@@ -112,7 +113,7 @@
         <div class="filters" id="logFilters">
           <button data-f="all" class="on">Усі</button><button data-f="cmd">Команди</button><button data-f="train">Поїзди</button><button data-f="delay">Затримки</button><button data-f="error">Помилки</button>
         </div>
-        <div class="log" id="log"></div>
+        <div class="tbl-wrap sheet log-wrap"><table class="logt"><thead><tr><th>Дата</th><th>Час</th><th>Тип</th><th>Зміст</th></tr></thead><tbody id="log"></tbody></table></div>
       </div>
     </div>
   </div>
@@ -175,7 +176,7 @@
     <h4>Вагони в тупиках</h4>
     <p>Маневрові роботи подають вагони на колії 14, 15 і 10 і залишають їх там (на схемі «ваг.», ділянка червона), доки інша робота їх не прибере. Маневровий маршрут на зайняту колію дозволено.</p>
     <h4>Вигляд</h4>
-    <p>Фон пульта: <span class="seg" id="themeSeg"><button data-t="black" class="on">чорний</button><button data-t="grey">сірий</button></span></p>
+    <p>Фон (чорний або сірий) перемикається в «⚙ Налаштування».</p>
     <p>«▣ Лише пульт» згортає все, крім пульта, і розтягує план станції приблизно на 70 % висоти екрана. «⏱ Час» — пуск/пауза, прискорення x1–x60, прокрутка до події, скидання доби. Відомості про поїзд — клацнути рядок у розкладі або поїзд на схемі.</p>
     <h4>Легенда</h4>
     <div class="legend">
