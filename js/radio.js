@@ -114,6 +114,17 @@
         const sig = tr.wait.replace("чекає відкриття ", "");
         push({ kind: "drv", train: tr.num, text: "ДСП " + ME + ", я машиніст поїзда № " + tr.num + ". Стою біля закритого світлофора " + sig + ".", need: "driver" });
       });
+      // more than 10 messages waiting: the duty officer's assistant answers all of them
+      if (R.msgs.filter((m) => m.need).length > 10) {
+        let n = 0;
+        for (let k = 0; k < 6; k++) {
+          const list = R.msgs.filter((m) => m.need);
+          if (!list.length) break;
+          list.forEach((m) => { act(m.id, "ok"); n++; });
+        }
+        sim().log("warn", "Радіо: понад 10 повідомлень без відповіді — відповіли автоматично (" + n + ")");
+        if (hooks && hooks.toast) hooks.toast("Радіо: понад 10 повідомлень — на всі відповіли автоматично.");
+      }
       const pend = R.msgs.filter((m) => m.need).length;
       $("radioBadge").textContent = pend ? pend : "";
       $("btnRadio").classList.toggle("alert", R.msgs.some((m) => m.need && m.overdue));

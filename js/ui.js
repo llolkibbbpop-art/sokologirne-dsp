@@ -9,8 +9,9 @@
   const NS = "http://www.w3.org/2000/svg";
   // state that outlives one station screen (line mode switches stations without reloading)
   const KEEP = { running: true, speed: 1, autoCode: true, sound: true, radio: {} };
-  // a model day (24 h) takes 35 minutes of real time at ×1
-  const DAY_RATE = 86400 / (35 * 60);
+  const DAY_RATE = 86400 / 3600;   // a model day takes one hour at ×1
+  // the auto-dispatcher setting: false (off), "trains" (trains only, the DSP does the shunting), true (all)
+  const autoVal = () => { const v = document.getElementById("selAuto").value; return v === "trains" ? "trains" : v === "all"; };
   // timetable source: seeded generator (default) or the fixed JSON from the task
   const src = { kind: "gen", seed: 2014, level: "medium" };
 
@@ -378,8 +379,8 @@
     $("indFuse").classList.toggle("lit", S.faults.fuse); $("indSlow").classList.toggle("lit", S.faults.slow); $("indKv").classList.toggle("lit", S.faults.kv);
     $("indIR").classList.toggle("lit", Object.values(S.sec).some((s) => s.artUntil != null));
     $("indCut").classList.toggle("lit", Object.values(S.sw).some((s) => s.lost));
-    $("indAuto").textContent = S.auto ? "АВТО" : "РУЧНЕ";
-    $("indAuto").classList.toggle("on", S.auto);
+    $("indAuto").textContent = S.auto === "trains" ? "МАНЕВРИ" : S.auto ? "АВТО" : "РУЧНЕ";
+    $("indAuto").classList.toggle("on", !!S.auto);
     const ld = S.lastDir, any = Object.values(S.routes).length > 0;
     $("dirL").className = "dir-arrow" + (any && ld && ld.dir === "L" ? " " + ld.mode : "");
     $("dirR").className = "dir-arrow" + (any && ld && ld.dir === "R" ? " " + ld.mode : "");
@@ -557,7 +558,7 @@
       });
     } catch (e) { /* audio unavailable */ }
   }
-  const radio = window.Radio.init(() => sim, { ring, store: (KEEP.radio[T.id] = KEEP.radio[T.id] || {}) }, T);
+  const radio = window.Radio.init(() => sim, { ring, toast: (m) => toast(m), store: (KEEP.radio[T.id] = KEEP.radio[T.id] || {}) }, T);
   offs.push(sim.on((e) => radio.onEvent(e)));
 
   // accident: show the cause at the top left and restart the day from 00:00
@@ -566,8 +567,8 @@
     if (REMOTE) return;
     $("accText").textContent = " Доба " + a.day + ", " + E.fmt(a.time).slice(0, 5) + (W ? ", ст. " + T.station : "") + ". " + a.text + ". Добу перезапущено з 00:00" + (W ? " на всій ділянці" : "") + ".";
     $("accident").hidden = false;
-    if (W) { W.playerAuto = $("chkAuto").checked; W.endMode = $("selEnd").value; W.shunting = $("chkShunt").checked; W.reset(); }
-    else sim.reset({ auto: $("chkAuto").checked, endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
+    if (W) { W.playerAuto = autoVal(); W.endMode = $("selEnd").value; W.shunting = $("chkShunt").checked; W.reset(); }
+    else sim.reset({ auto: autoVal(), endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
     sim.log("error", "Перезапуск після аварії: " + a.text);
     ui.sel = null; ui.selTrain = null; ui.selEvent = null; if (ui.pick) stopPick();
     setRunning(true); refresh(true);
@@ -684,9 +685,16 @@
   function renderNext() {
     const S = sim.S;
     // the most urgent: an active train waiting at a red signal, else the next scheduled one
-    const waiting = S.trains.find((t) => !t.done && t.wait && t.eventIdx != null);
+    // «лише маневри»: only the shunting work is the DSP's
+    const mine = (t) => S.auto !== "trains" || !!t.shunt;
+    const waiting = S.trains.find((t) => !t.done && t.wait && t.eventIdx != null && mine(t));
     let ev, at;
     if (waiting) { ev = S.events[waiting.eventIdx]; at = ev.time + ev.delayMin * 60; }
+    else if (S.auto === "trains") {
+      const n = S.events.filter((e) => e.ev.type === "shunting" && e.status !== "passed" && e.status !== "config").map((e) => ({ e, at: e.time + e.delayMin * 60 })).sort((a, b) => a.at - b.at)[0];
+      if (!n) { $("nextBox").innerHTML = "Маневрових робіт до кінця доби немає."; return; }
+      ev = n.e; at = n.at;
+    }
     else { const n = sim.nextEvent(); if (!n) { $("nextBox").innerHTML = "Подій до кінця доби немає."; return; } ev = n.e; at = n.at; }
     const dt = at - S.time, late = sim.lateMin(ev);
     const [cls, txt] = statusInfo(ev);
@@ -876,7 +884,7 @@
     const tag = (id) => {
       const ws = ro.filter((r) => r.view === id && r.st !== id);
       const own = who(id);
-      const base = id === ctx.st && !RO ? "ви" + (sim.S.auto ? " · авто" : "") : own.length ? "" : "автодиспетчер";
+      const base = id === ctx.st && !RO ? "ви" + (sim.S.auto === "trains" ? " · маневри" : sim.S.auto ? " · авто" : "") : own.length ? "" : "автодиспетчер";
       return base + (own.length ? own.map(badge).join(" ") : "") + (ws.length ? " · дивляться: " + ws.map((r) => esc(r.name)).join(", ") : "");
     };
     const appr = (id) => (W.info ? W.info(id).appr : 0);
@@ -918,16 +926,22 @@
   // ---------- controls ----------
   function setRunning(r) { ui.running = KEEP.running = r; $("btnPlay").textContent = r ? "⏸ Пауза" : "▶ Пуск"; $("btnPlay").classList.toggle("on", r); }
   $("btnPlay").onclick = () => { if (hostOnly()) return; if (sim.S.paused) { toast("Доба завершена. Скиньте добу або оберіть «новий день».", "err"); return; } setRunning(!ui.running); };
-  $("speedSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b || hostOnly()) return; ui.speed = KEEP.speed = +b.dataset.s; [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", x === b)); sim.log("cmd", "Швидкість ×" + ui.speed + " (доба за " + Math.round(35 / ui.speed) + " хв)"); renderLog(); });
+  $("speedSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b || hostOnly()) return; ui.speed = KEEP.speed = +b.dataset.s; [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", x === b)); sim.log("cmd", "Швидкість ×" + ui.speed + " (доба за " + (60 / ui.speed >= 60 ? Math.round(1 / ui.speed * 10) / 10 + " год" : Math.round(60 / ui.speed) + " хв") + ")"); renderLog(); });
   $("btnReset").onclick = () => {
     if (hostOnly()) return;
-    if (W) { W.playerAuto = $("chkAuto").checked; W.endMode = $("selEnd").value; W.shunting = $("chkShunt").checked; W.reset(); }
-    else sim.reset({ auto: $("chkAuto").checked, endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
+    if (W) { W.playerAuto = autoVal(); W.endMode = $("selEnd").value; W.shunting = $("chkShunt").checked; W.reset(); }
+    else sim.reset({ auto: autoVal(), endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
     ui.sel = null; ui.selTrain = null; ui.selEvent = null; acc = 0; $("infoPop").classList.remove("open"); if (ui.pick) stopPick();
     toast("Добу скинуто на 00:00:00.", "ok"); refresh(true);
   };
-  $("chkAuto").checked = sim.S.auto;
-  $("chkAuto").onchange = (e) => { if (RO) { e.target.checked = sim.S.auto; toast("Режим спостереження.", "err"); return; } if (REMOTE) { ctx.netCmd("__auto", [e.target.checked]); return; } sim.S.auto = e.target.checked; if (W) W.playerAuto = e.target.checked; sim.log("cmd", "Автодиспетчер " + (sim.S.auto ? "увімкнено: маршрути задає система" : "вимкнено: маршрути задає ДСП")); refresh(); };
+  $("selAuto").value = sim.S.auto === "trains" ? "trains" : sim.S.auto ? "all" : "off";
+  $("selAuto").onchange = (e) => {
+    const v = autoVal();
+    if (RO) { e.target.value = sim.S.auto === "trains" ? "trains" : sim.S.auto ? "all" : "off"; toast("Режим спостереження.", "err"); return; }
+    if (REMOTE) { ctx.netCmd("__auto", [v]); return; }
+    sim.S.auto = v; if (W) W.playerAuto = v;
+    sim.log("cmd", "Автодиспетчер: " + (v === "trains" ? "поїзди веде система, маневрові роботи виконує ДСП" : v ? "маршрути задає система" : "вимкнено, маршрути задає ДСП")); refresh();
+  };
   $("chkCode").onchange = (e) => { ui.autoCode = KEEP.autoCode = e.target.checked; };
   $("chkSound").onchange = (e) => { ui.sound = KEEP.sound = e.target.checked; };
   $("selEnd").onchange = (e) => { if (W) { W.endMode = e.target.value; Object.values(W.sims).forEach((x) => (x.S.endMode = e.target.value)); } else sim.S.endMode = e.target.value; };
@@ -948,8 +962,8 @@
   };
   function applySource(msg) {
     if (hostOnly()) return;
-    if (W) { W.playerAuto = $("chkAuto").checked; W.endMode = $("selEnd").value; W.shunting = $("chkShunt").checked; W.regenerate(src.seed, src.level); }
-    else sim.setSchedule(scheduleSource(), { auto: $("chkAuto").checked, endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
+    if (W) { W.playerAuto = autoVal(); W.endMode = $("selEnd").value; W.shunting = $("chkShunt").checked; W.regenerate(src.seed, src.level); }
+    else sim.setSchedule(scheduleSource(), { auto: autoVal(), endMode: $("selEnd").value, shuntingEnabled: $("chkShunt").checked, delays: {} });
     ui.sel = null; ui.selTrain = null; ui.selEvent = null; acc = 0; $("infoPop").classList.remove("open");
     toast(msg, "ok"); refresh(true);
   }
@@ -1002,7 +1016,8 @@
   // stations that belong to a route appear only inside that route
   const inLine = new Set([].concat(...Object.values(LINES).map((l) => l.stations)));
   const singles = Object.values(SD).filter((st) => !inLine.has(st.id));
-  const lineBtns = Object.values(LINES).map((l) => `<button data-line="${esc(l.id)}" class="${W && W.L.id === l.id ? "on" : ""}"><b>Маршрут ${esc(l.name.replace(" — ", " → "))}</b><span>${l.stations.map((x) => esc(SD[x].name)).join(" · ")} — ${l.stations.length} станції разом</span></button>`).join("");
+  const lineBtns = Object.values(LINES).map((l) => `<button data-line="${esc(l.id)}" class="${W && W.L.id === l.id && !window.LINE_MODE ? "on" : ""}"><b>Маршрут ${esc(l.name.replace(" — ", " → "))}</b><span>${l.stations.map((x) => esc(SD[x].name)).join(" · ")} — ${l.stations.length} станції разом</span></button>` +
+    (l.modes || []).map((m) => `<button data-line="${esc(l.id)}" data-mode="${esc(m.id)}" class="${W && W.L.id === l.id && window.LINE_MODE === m.id ? "on" : ""}"><b>${esc(l.name.replace(" — ", " → "))}: ${esc(m.name)}</b><span>${esc(m.note)}</span></button>`).join("")).join("");
   $("stationList").innerHTML = (W
     ? `<div class="st-cap">Зараз: маршрут ${esc(W.L.name.replace(" — ", " → "))}</div><p class="st-note">Між станціями маршруту перемикайтеся кнопкою «⇄» поруч. Станції без гравця веде автодиспетчер.</p>` +
       `<button data-single="1"><b>← Вийти з маршруту</b><span>до окремих станцій</span></button><div class="st-cap">Окремі станції</div>`
@@ -1011,7 +1026,7 @@
     `<div class="st-cap">Маршрути (кілька станцій разом)</div>` + lineBtns;
   $("stationList").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b || b.disabled) return;
-    if (b.dataset.line) { if (W && W.L.id === b.dataset.line) return; confirmCmd("МР", LINES[b.dataset.line].name, "Перейти на маршрут " + LINES[b.dataset.line].name.replace(" — ", " → ") + " (поточна доба на ст. " + T.station + " завершиться)", false, () => { window.selectLine(b.dataset.line); return { ok: true }; }); return; }
+    if (b.dataset.line) { const md = b.dataset.mode || null; if (W && W.L.id === b.dataset.line && (window.LINE_MODE || null) === md) return; confirmCmd("МР", LINES[b.dataset.line].name, "Перейти на маршрут " + LINES[b.dataset.line].name.replace(" — ", " → ") + (md ? " — режим «лише маневри»" : "") + " (поточна доба завершиться)", false, () => { window.selectLine(b.dataset.line, md); return { ok: true }; }); return; }
     if (b.dataset.single) { confirmCmd("МР", "Вихід з маршруту", "Вийти з маршруту " + W.L.name + " до окремих станцій (поточна доба на маршруті завершиться)", false, () => { window.selectStation("sokologirne"); return { ok: true }; }); return; }
     if (!b.dataset.st || (!W && b.dataset.st === T.id)) return;
     confirmCmd("СТ", SD[b.dataset.st].name, "Перейти на станцію " + SD[b.dataset.st].name + " (поточна доба " + (W ? "на маршруті" : "на станції " + T.station) + " завершиться)", false, () => { window.selectStation(b.dataset.st); return { ok: true }; });
@@ -1092,7 +1107,7 @@
   setRunning(ui.running);
   ["btnPlay", "btnReset", "btnSkip", "selEnd", "chkShunt", "selLevel", "btnGen", "btnNewSeed", "inSeed", "selSrc"].forEach((id) => { if ($(id)) $(id).disabled = REMOTE; });
   [...$("speedSeg").children].forEach((x) => (x.disabled = REMOTE));
-  $("timeNote").textContent = REMOTE ? "Часом, швидкістю і графіком керує лише той, хто створив кімнату (ведучий)." : "×1 — модельна доба за 35 хв реального часу.";
+  $("timeNote").textContent = REMOTE ? "Часом, швидкістю і графіком керує лише той, хто створив кімнату (ведучий)." : "×1 — модельна доба за 1 год реального часу.";
   [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", +x.dataset.s === ui.speed));
   $("chkCode").checked = ui.autoCode; $("chkSound").checked = ui.sound;
   if (W) { $("selEnd").value = W.endMode; $("chkShunt").checked = W.shunting; $("inSeed").value = W.seed; $("selLevel").value = W.level; }
@@ -1125,6 +1140,8 @@
     const L = window.LineWorld.LINES[window.LINE_ID];
     let st = window.LINE_PLAYER && L.stations.includes(window.LINE_PLAYER) ? window.LINE_PLAYER : L.stations[0];
     const world = window.LineWorld.createWorld(L.id, { player: st, seed: src.seed, level: src.level });
+    // «лише маневри»: the trains run by themselves, the DSP does the shunting work
+    if (window.LINE_MODE === "shunt") { world.playerAuto = "trains"; world.sims[st].S.auto = "trains"; }
     window.__world = world;
     const NET = { s: null, err: "" };
     const ownCursor = (look) => {

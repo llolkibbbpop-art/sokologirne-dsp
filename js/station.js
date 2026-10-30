@@ -21,6 +21,8 @@
     let pl = pm && pm[1];
     if (!pl) { try { pl = localStorage.getItem("dsp-line-player"); } catch (e) { /* storage unavailable */ } }
     window.LINE_PLAYER = pl || null;
+    const mm = /(?:^|[#&])mode=([a-z]+)/.exec(location.hash || "");
+    window.LINE_MODE = mm ? mm[1] : null;
   }
   let id = null;
   const m = /(?:^|[#&])st=([a-z0-9]+)/.exec(location.hash || "");
@@ -42,8 +44,8 @@
     location.hash = "st=" + nid;
     location.reload();
   };
-  window.selectLine = function (lid) {
-    location.hash = "line=" + lid;
+  window.selectLine = function (lid, mode) {
+    location.hash = "line=" + lid + (mode ? "&mode=" + mode : "") + (mode === "shunt" ? "&p=dnipro" : "");
     location.reload();
   };
 })();

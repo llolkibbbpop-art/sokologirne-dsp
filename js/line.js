@@ -25,7 +25,8 @@
       links: [["dnipro", "A", "amur", "D", 4, false]],
       outer: { "dnipro:K": "Кайдацька", "dnipro:G": "Горяїнове", "dnipro:S": "Сухачівка", "amur:N": "Нижньодніпровськ" },
       order: ["dnipro", "amur"], ends: ["← Горяїнове · Кайдацька · Сухачівка", "Нижньодніпровськ →"],
-      capacity: { dnipro: 2 }, base: "dnipro"
+      capacity: { dnipro: 2 }, base: "dnipro",
+      modes: [{ id: "shunt", name: "лише маневри на Дніпрі-Головному", note: "поїзди веде автодиспетчер, маневрові роботи виконуєте ви" }]
     }
   };
   // a line whose timetable is that of its main station: trains to / from the neighbour are added there
@@ -44,7 +45,7 @@
         const other = Object.keys(TN.lineByKey).find((k2) => k2 !== nbKey);   // the far side of the neighbour
         const t = pm(e.time);
         if (e.exitTo && e.exitTo === TB.lineByKey[myKey].exit) {
-          const tn = t + (e.action === "depart" ? 0 : e.stopMin || 0) + run + 8;
+          const tn = t + (e.action === "depart" ? 0 : e.stopMin ? Math.max(e.stopMin, 5) : 0) + run + 8;
           if (tn > 1430) return;
           const id = "d" + day + "-n" + ++jn;
           e.lineId = id; e.next = { st: nb, run };
@@ -104,7 +105,7 @@
       const ts = []; let t = t0;
       for (let i = 0; i < path.length; i++) {
         ts.push(t);
-        if (i < path.length - 1) { const ln = linkOf(L, path[i][0], path[i][2]); t += (stops[i] || 0) + ln.run + 8; }
+        if (i < path.length - 1) { const ln = linkOf(L, path[i][0], path[i][2]); t += (stops[i] ? Math.max(stops[i], 5) : 0) + ln.run + 8; }
       }
       return ts[ts.length - 1] < 1425 && t0 > 5 ? ts : null;
     }
@@ -269,7 +270,7 @@
     W.setPlayer = (st, auto) => {
       const prev = W.player; W.player = st;
       if (W.sims[prev] && prev !== st && !(W.others && (W.others.get(prev) || []).length)) W.sims[prev].S.auto = true;
-      if (W.sims[st]) W.sims[st].S.auto = !!auto;
+      if (W.sims[st]) W.sims[st].S.auto = auto || false;
     };
     W.inTransit = () => transit.slice();
     // how many players a station takes (Дніпро-Головний: two), and whether it is full for one more

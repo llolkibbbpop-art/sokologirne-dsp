@@ -153,6 +153,7 @@
   }
 
   // ---------------------------------------------------------------- simulation
+  const MIN_STOP = 5;
   function createSim(T, SCHED, P, opts) {
     const D = derive(T);
     const listeners = [];
@@ -202,7 +203,9 @@
 
     const schedFor = (day) => (typeof SCHED === "function" ? SCHED(day) : SCHED);
     function buildEvents() {
-      return schedFor(S.day).events.map((ev, i) => {
+      return schedFor(S.day).events.map((ev0, i) => {
+        // a train that stops stands at least MIN_STOP minutes (also when it comes late)
+        const ev = ev0.stopMin > 0 && ev0.stopMin < MIN_STOP ? Object.assign({}, ev0, { stopMin: MIN_STOP, stopPlan: ev0.stopMin }) : ev0;
         const parity = P.directionParity[ev.direction] || null;
         let needsConfig = null;
         if (ev.action === "shunting_sequence") {
@@ -228,7 +231,7 @@
       Object.keys(D.sections).forEach((id) => (S.sec[id] = { occ: null, lock: null, blocked: false, artUntil: null, falseOcc: false, wagons: null }));
       Object.keys(D.signals).forEach((id) => (S.sig[id] = { open: false, aspect: null, inv: null, blocked: false }));
       S.events = buildEvents();
-      log("sys", "Початок модельної доби. Режим: " + (S.auto ? "автодиспетчер" : "ручне керування"));
+      log("sys", "Початок модельної доби. Режим: " + (S.auto === "trains" ? "поїзди — автодиспетчер, маневри — ДСП" : S.auto ? "автодиспетчер" : "ручне керування"));
       D.problems.forEach((p) => log("warn", "Топологія: " + p));
     }
 
@@ -646,16 +649,18 @@
       log("train", trainLabel(tr.id) + " проходить " + sig + (R.invite ? " за запрошувальним сигналом (≤20 км/год)" : " · " + rid), { evt: "pass", sigKind: D.signals[sig].kind, sig, trId: tr.id });
     }
 
+    // automatic dispatcher: everything (true), or only trains while the DSP does the shunting ("trains")
+    const autoOn = (tr) => S.auto === true || (S.auto === "trains" && !tr.shunt);
     function stepTrain(tr) {
       if (tr.done) return;
       tr.tIn++;
       if (tr.notBefore && S.time < tr.notBefore && tr.idx === tr.seq.length - 1) {
-        if (S.auto && S.time >= tr.notBefore - 45) autoDispatch(tr);
+        if (autoOn(tr) && S.time >= tr.notBefore - 45) autoDispatch(tr);
         const st = "посадка/огляд, відправлення о " + fmt(tr.notBefore).slice(0, 5);
         if (tr.status !== st) tr.status = st;
         return;
       }
-      if (S.auto && !tr.loco && tr.idx >= tr.seq.length - 2 && !(tr.shunt && (tr.shunt.plan[tr.shunt.step] || {}).wait)) {
+      if (autoOn(tr) && !tr.loco && tr.idx >= tr.seq.length - 2 && !(tr.shunt && (tr.shunt.plan[tr.shunt.step] || {}).wait)) {
         // a train with a stop gets its departure route only near the end of the stop
         const lastKind = D.sections[tr.seq[tr.seq.length - 1]].kind;
         const dwelling = lastKind === "track" && tr.stopSec && !tr.shunt &&
@@ -995,6 +1000,6 @@
     };
   }
 
-  root.SimEngine = { createSim, derive, fmt, DAY };
+  root.SimEngine = { createSim, derive, fmt, DAY, MIN_STOP };
   if (typeof module !== "undefined") module.exports = root.SimEngine;
 })(typeof window !== "undefined" ? window : globalThis);

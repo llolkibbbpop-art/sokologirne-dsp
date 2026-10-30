@@ -126,7 +126,7 @@
         if (m.t === "cmd") {
           let r;
           if (m.st !== p.st || p.view !== p.st) r = { ok: false, err: "Ви не керуєте цією станцією" };
-          else if (m.m === "__auto") { world.sims[p.st].S.auto = !!m.a[0]; world.sims[p.st].log("cmd", "Автодиспетчер " + (m.a[0] ? "увімкнено" : "вимкнено") + " (гравець " + p.name + ")"); r = { ok: true }; }
+          else if (m.m === "__auto") { const v = m.a[0] === "trains" ? "trains" : !!m.a[0]; world.sims[p.st].S.auto = v; world.sims[p.st].log("cmd", "Автодиспетчер: " + (v === "trains" ? "лише поїзди, маневри — ДСП" : v ? "усе" : "вимкнено") + " (гравець " + p.name + ")"); r = { ok: true }; }
           else if (MUT.includes(m.m)) { try { r = world.sims[p.st][m.m](...(m.a || [])); } catch (e) { r = { ok: false, err: String(e.message || e) }; } }
           c.send({ t: "res", id: m.id, r: r && typeof r === "object" ? { ok: r.ok, err: r.err } : r });
         } else if (m.t === "switch") {
