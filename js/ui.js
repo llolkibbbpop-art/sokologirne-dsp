@@ -867,7 +867,7 @@
     const box = $("lineStrip"); if (!W) { box.hidden = true; return; }
     box.hidden = false;
     const L = W.L, tr = W.inTransit(), SDx = window.STATION_DATA, ro = (W.roster && W.roster()) || [];
-    const who = (id) => ro.filter((r) => r.st === id);
+    const who = (id) => ro.filter((r) => r.st === id && r.id !== ctx.meId);
     const badge = (r) => `<i class="pl" style="--pc:${r.color}" title="${esc(r.name)}">${esc(r.name)}</i>`;
     const tag = (id) => {
       const ws = ro.filter((r) => r.view === id && r.st !== id);
@@ -876,21 +876,22 @@
       return base + (own.length ? own.map(badge).join(" ") : "") + (ws.length ? " · дивляться: " + ws.map((r) => esc(r.name)).join(", ") : "");
     };
     const appr = (id) => (W.info ? W.info(id).appr : 0);
-    const cell = (id) => { const busy = W.others && W.others.get(id) && id !== ctx.st;
+    const cell = (id) => { const busy = W.full && W.full(id) && id !== ctx.st;
       return `<button class="ls-st${id === ctx.st ? " me" : busy ? " other" : ""}" data-ls="${id}" title="${busy ? "станцією керує інший гравець — клацніть, щоб спостерігати" : "перейти на станцію"}"><b>${esc(SDx[id].name)}${id === ctx.st && RO ? " · спостереження" : ""}</b><span>${tag(id)}${appr(id) ? " · на підході " + appr(id) : ""}</span></button>`; };
     const gap = (a, b) => { const ln = L.links.find((l) => (l[0] === a && l[2] === b) || (l[0] === b && l[2] === a));
       const on = tr.filter((x) => (x.from === a && x.to === b) || (x.from === b && x.to === a));
       return `<div class="ls-gap${ln && ln[5] ? " single" : ""}">${on.length ? on.map((x) => `<span class="tr">${x.from === a ? "→" : "←"} № ${esc(x.train)}</span>`).join("") : "<span>перегін вільний</span>"}</div>`; };
-    const order = ["sivash", "salkove", "novooleksiivka", "henichesk"].filter((x) => L.stations.includes(x));
-    let html = `<div class="ls-end">← Солоне Озеро</div>`;
+    const order = L.order || L.stations, ends = L.ends || ["", ""];
+    let html = ends[0] ? `<div class="ls-end">${esc(ends[0])}</div>` : "";
     order.forEach((id, i) => { html += cell(id); if (i < order.length - 1) html += gap(id, order[i + 1]); });
+    if (ends[1]) html += `<div class="ls-end">${esc(ends[1])}</div>`;
     if (box.__h !== html) { box.innerHTML = html; box.__h = html; }
   }
   $("lineStrip").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-ls]"); if (!b) return;
     const id = b.dataset.ls;
     if (id === ctx.st && !RO) return;
-    const busy = W.others && W.others.get(id);
+    const busy = W.full && W.full(id);
     if (busy) window.switchStation(id, { watch: true }); else window.switchStation(id);
   });
   // other players' pointers on this station's plan
@@ -992,7 +993,8 @@
   $("brandSub").textContent = (W ? "Маршрут " + W.L.name.replace(" — ", " → ") + " · " : "Навчальна модель МПЦ · ") + "план від " + T.planDate;
   document.querySelectorAll("[data-station]").forEach((n) => (n.hidden = n.dataset.station !== T.id));
   const SD = window.STATION_DATA || {}, LINES = (window.LineWorld && window.LineWorld.LINES) || {};
-  const occupied = (id) => (W && W.others && W.others.get(id)) || null;
+  // names of the other players at a station, but only when it has no room left
+  const occupied = (id) => (W && W.full && W.full(id) ? ((W.others && W.others.get(id)) || []).join(", ") : null);
   // stations that belong to a route appear only inside that route
   const inLine = new Set([].concat(...Object.values(LINES).map((l) => l.stations)));
   const singles = Object.values(SD).filter((st) => !inLine.has(st.id));
@@ -1018,8 +1020,10 @@
     const renderLineSt = () => {
       const ro = (W.roster && W.roster()) || [];
       const html = `<div class="st-cap">Станції маршруту ${esc(W.L.name.replace(" — ", " → "))}</div>` + W.L.stations.map((id, i) => {
-        const who = occupied(id), here = id === T.id, pl = ro.find((r) => r.st === id);
-        return `<button data-lst="${esc(id)}" class="${here ? "on" : ""}"><b>${i + 1}. ${esc(SD[id].name)}</b><span>${here ? (RO ? "ви спостерігаєте" : "ви тут") : who ? "керує " + esc(who) + " — можна лише спостерігати" : pl ? "" : "автодиспетчер — клацніть, щоб перейти"}</span></button>`;
+        const who = occupied(id), here = id === T.id, names = (W.others && W.others.get(id)) || [], cap = W.cap ? W.cap(id) : 1;
+        const sub = here ? (RO ? "ви спостерігаєте" : "ви тут" + (names.length ? " разом з " + names.join(", ") : "")) : who ? "керує " + who + " — можна лише спостерігати"
+          : names.length ? "керує " + names.join(", ") + " — є місце ще для " + (cap - names.length) : "автодиспетчер — клацніть, щоб перейти" + (cap > 1 ? " (до " + cap + " гравців)" : "");
+        return `<button data-lst="${esc(id)}" class="${here ? "on" : ""}"><b>${i + 1}. ${esc(SD[id].name)}</b><span>${esc(sub)}</span></button>`;
       }).join("");
       if ($("lineStList").__h !== html) { $("lineStList").innerHTML = html; $("lineStList").__h = html; }
     };
@@ -1119,7 +1123,7 @@
     // ---------------- this browser runs the line (alone or as the host)
     let cur = null;
     const hostCtx = (id, watch) => ({ T: SDATA[id].TOPOLOGY, P: SDATA[id].MODEL_PARAMS, generate: SDATA[id].generate, SCHEDULE: null, world, st: id,
-      wrap: watch ? (x) => window.Net.readonlySim(x) : null, readonly: !!watch,
+      wrap: watch ? (x) => window.Net.readonlySim(x) : null, readonly: !!watch, meId: "host",
       onCursor: (x, y, view) => { if (NET.s && NET.s.role === "host") NET.s.cursor(x, y, view); },
       cursors: () => (NET.s && NET.s.role === "host" ? cursorList(NET.s.cursors, NET.s.roster(), "host") : []) });
     world.roster = () => (NET.s && NET.s.role === "host" ? NET.s.roster() : []);
@@ -1130,7 +1134,7 @@
     window.switchStation = (id, o) => {
       if (NET.s && NET.s.role === "client") return clientSwitch(id, o);
       if (!world.sims[id] || (id === cur.view && !(o && o.watch) && cur.st === id)) return false;
-      const busy = world.others && world.others.has(id);
+      const busy = world.full(id);
       if (busy || (o && o.watch)) { world.setPlayer(null); remountHost(id, true); return true; }
       world.setPlayer(id, world.playerAuto);
       try { localStorage.setItem("dsp-line-player", id); } catch (e) { /* storage unavailable */ }
@@ -1143,7 +1147,7 @@
       const T = SDATA[view].TOPOLOGY, P = SDATA[view].MODEL_PARAMS;
       cw.sims[view] = cw.sims[view] || E.createSim(T, () => ({ events: [] }), P, { auto: false });
       const own = view === C.st;
-      return { T, P, generate: SDATA[view].generate, SCHEDULE: null, world: cw, st: view, readonly: !own,
+      return { T, P, generate: SDATA[view].generate, SCHEDULE: null, world: cw, st: view, readonly: !own, meId: C.me.id,
         wrap: (x) => (own ? window.Net.remoteSim(x, C, (m, r) => { if (r && r.ok === false && cur.ctx && cur.ctx.api) cur.ctx.api.toast("Відмова: " + r.err, "err"); }) : window.Net.readonlySim(x)),
         netCmd: (m, a) => C.conn.send({ t: "cmd", st: C.view, m, a, id: ++C.seq }),
         onCursor: (x, y) => C.conn.send({ t: "cur", x, y }),
@@ -1156,7 +1160,7 @@
       cur = { st: C.st, view, ctx, off: mountTracked(ctx) };
       renderNet();
     }
-    function clientSwitch(id, o) { C.conn.send({ t: "switch", st: id, watch: !!(o && o.watch) || (cw.others && cw.others.has(id)) }); return true; }
+    function clientSwitch(id, o) { C.conn.send({ t: "switch", st: id, watch: !!(o && o.watch) || cw.full(id) }); return true; }
     async function joinRoom(code) {
       NET.err = ""; NET.busy = "Підключення…"; renderNet();
       try {
@@ -1164,7 +1168,7 @@
           onState: (m) => {
             const sm = cw.sims[m.view]; if (!sm) return;
             sm.ingest(m.snap, m.restart);
-            cw.others = new Map(m.roster.filter((r) => r.st && r.id !== C.me.id).map((r) => [r.st, r.name]));
+            const om = new Map(); m.roster.filter((r) => r.st && r.id !== C.me.id).forEach((r) => om.set(r.st, (om.get(r.st) || []).concat(r.name))); cw.others = om;
             KEEP.running = m.clock.running; KEEP.speed = m.clock.speed;
           },
           onAssign: (m) => mountClient(m.view),
@@ -1175,6 +1179,7 @@
         C = c; NET.s = C; NET.busy = "";
         Object.values(world.sims).forEach((x) => (x.S.paused = true));   // our own copy of the line stops
         cw = { remote: true, id: world.id, L: world.L, sims: {}, others: new Map(), player: C.st, seed: C.seed, level: C.level, endMode: "newday", shunting: true, playerAuto: false,
+          cap: (s2) => (world.L.capacity && world.L.capacity[s2]) || 1, full: (s2) => ((cw.others && cw.others.get(s2)) || []).length >= ((world.L.capacity && world.L.capacity[s2]) || 1),
           step() {}, isIdle: () => false, reset() {}, regenerate() {}, setPlayer() {}, inTransit: () => C.transit || [], info: (id) => (C.info && C.info[id]) || { appr: 0 }, roster: () => C.roster || [] };
         ownCursor(C.me);
         mountClient(C.st);
@@ -1193,12 +1198,12 @@
     try { NET.name = localStorage.getItem("dsp-net-name") || ""; } catch (e) { /* storage unavailable */ }
     function renderNet() {
       const box = $("netBox"); if (!box) return;
-      const s = NET.s, max = world.L.stations.length;
+      const s = NET.s, max = world.L.stations.reduce((n, x) => n + ((world.L.capacity && world.L.capacity[x]) || 1), 0);
       $("netLbl").textContent = s ? (s.role === "host" ? "Кімната " + s.code : "У грі " + s.code) : "Мережа";
       $("netLbl").classList.toggle("on", !!s);
       let h = "";
       if (!s) {
-        h = `<p class="nb-note">Кожен гравець керує своєю станцією ділянки, решту веде автодиспетчер. Гравців — не більше, ніж станцій (${max}).</p>
+        h = `<p class="nb-note">Кожен гравець керує своєю станцією маршруту, решту веде автодиспетчер. Гравців — не більше ${max}${world.L.capacity ? " (" + Object.entries(world.L.capacity).map(([k, v]) => SDATA[k].name + " — до " + v).join(", ") + ")" : ""}.</p>
           <div class="nb-row"><label for="netName">Ваше ім'я</label><input type="text" id="netName" maxlength="24" value="${esc0(NET.name || "")}" placeholder="Гравець"></div>
           <div class="nb-row"><button id="netHost">Створити кімнату</button><button id="netLocal" title="Для перевірки: гравці — інші вкладки цього ж браузера">У вкладках</button></div>
           <div class="nb-row"><input type="text" id="netCode" maxlength="8" placeholder="Код кімнати" autocomplete="off"><button id="netJoin">Приєднатися</button></div>

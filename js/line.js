@@ -16,9 +16,58 @@
       stations: ["sivash", "salkove", "novooleksiivka", "henichesk"],
       // [station A, line key at A, station B, line key at B, running time (min), single-track]
       links: [["sivash", "S", "salkove", "V", 6, false], ["salkove", "N", "novooleksiivka", "S", 7, false], ["novooleksiivka", "G", "henichesk", "N", 10, true]],
-      outer: { "sivash:D": "Солоне Озеро (Джанкой)", "novooleksiivka:P": "Партизани (Мелітополь)" }
+      outer: { "sivash:D": "Солоне Озеро (Джанкой)", "novooleksiivka:P": "Партизани (Мелітополь)" },
+      order: ["sivash", "salkove", "novooleksiivka", "henichesk"], ends: ["← Солоне Озеро", ""]
+    },
+    dn: {
+      id: "dn", name: "Дніпро-Головний — Пост Амур", note: "маршрут: Дніпро-Головний → Пост Амур (Нижньодніпровськ); на Дніпрі-Головному — до 2 гравців",
+      stations: ["dnipro", "amur"],
+      links: [["dnipro", "A", "amur", "D", 4, false]],
+      outer: { "dnipro:K": "Кайдацька", "dnipro:G": "Горяїнове", "dnipro:S": "Сухачівка", "amur:N": "Нижньодніпровськ" },
+      order: ["dnipro", "amur"], ends: ["← Горяїнове · Кайдацька · Сухачівка", "Нижньодніпровськ →"],
+      capacity: { dnipro: 2 }, base: "dnipro"
     }
   };
+  // a line whose timetable is that of its main station: trains to / from the neighbour are added there
+  function generateDerived(L, seed, level, day) {
+    const base = L.base, out = {}; L.stations.forEach((s) => (out[s] = []));
+    const evs = window.STATION_DATA[base].generate(seed, level, day).events.map((e) => Object.assign({}, e));
+    const pm = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    let jn = 0;
+    evs.forEach((e) => {
+      out[base].push(e);
+      if (e.type === "shunting") return;
+      L.links.forEach((lk) => {
+        const me = lk[0] === base ? 0 : lk[2] === base ? 2 : -1; if (me < 0) return;
+        const myKey = lk[me + 1], nb = lk[2 - me], nbKey = lk[3 - me], run = lk[4];
+        const TB = window.STATION_DATA[base].TOPOLOGY, TN = window.STATION_DATA[nb].TOPOLOGY;
+        const other = Object.keys(TN.lineByKey).find((k2) => k2 !== nbKey);   // the far side of the neighbour
+        const t = pm(e.time);
+        if (e.exitTo && e.exitTo === TB.lineByKey[myKey].exit) {
+          const tn = t + (e.action === "depart" ? 0 : e.stopMin || 0) + run + 8;
+          if (tn > 1430) return;
+          const id = "d" + day + "-n" + ++jn;
+          e.lineId = id; e.next = { st: nb, run };
+          out[nb].push({ time: K.hm(tn), train: e.train, type: e.type, direction: oppo(TN.lineByKey[other].arrParity), action: "pass_station", stopMin: 0, entry: TN.lineByKey[nbKey].entry, exitTo: TN.lineByKey[other].exit,
+            from: window.STATION_DATA[base].name, to: e.to, lineId: id, hold: true, timeStatus: "generated", note: "без зупинки · " + window.STATION_DATA[base].name + " → " + TN.lineByKey[other].name });
+        }
+        if (e.entry && e.entry === TB.lineByKey[myKey].entry) {
+          const tn = t - run - 8;
+          if (tn < 5) return;
+          const id = "d" + day + "-n" + ++jn;
+          e.lineId = id; e.hold = true;
+          out[nb].push({ time: K.hm(tn), train: e.train, type: e.type, direction: oppo(TN.lineByKey[nbKey].arrParity), action: "pass_station", stopMin: 0, entry: TN.lineByKey[other].entry, exitTo: TN.lineByKey[nbKey].exit,
+            from: e.from, to: window.STATION_DATA[base].name, lineId: id, next: { st: base, run }, timeStatus: "generated", note: "без зупинки · " + TN.lineByKey[other].name + " → " + window.STATION_DATA[base].name });
+        }
+      });
+    });
+    const res = {};
+    L.stations.forEach((st) => {
+      out[st].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+      res[st] = { scheduleId: L.id + "_" + st + "_" + seed + "_" + level + "_d" + day, station: window.STATION_DATA[st].name, generated: true, events: out[st] };
+    });
+    return res;
+  }
 
   // ------------------------------------------------------------ the line timetable
   // a journey is a list of hops [station, line in, line out, stop min]; the time at a station is its arrival
@@ -161,7 +210,7 @@
     const W = { id: lineId, L, seed: o.seed || 2014, level: o.level || "medium", sims: {}, player: o.player || L.stations[0], endMode: "newday", shunting: true, playerAuto: false };
     let cache = {}, release = {}, transit = [], meta = {};
     const listeners = [];
-    const gen = (day) => cache[day] || (cache[day] = generateLine(L, W.seed, W.level, day));
+    const gen = (day) => cache[day] || (cache[day] = (L.base ? generateDerived : generateLine)(L, W.seed, W.level, day));
     const abs = (S) => S.day * 86400 + S.time;
     function hold(st, ev, S) {
       if (!ev.ev.hold) return false;
@@ -219,10 +268,13 @@
     W.regenerate = (seed, level) => { if (seed) W.seed = seed; if (level) W.level = level; W.reset(); };
     W.setPlayer = (st, auto) => {
       const prev = W.player; W.player = st;
-      if (W.sims[prev] && !(W.others && W.others.has(prev))) W.sims[prev].S.auto = true;
+      if (W.sims[prev] && prev !== st && !(W.others && (W.others.get(prev) || []).length)) W.sims[prev].S.auto = true;
       if (W.sims[st]) W.sims[st].S.auto = !!auto;
     };
     W.inTransit = () => transit.slice();
+    // how many players a station takes (Дніпро-Головний: two), and whether it is full for one more
+    W.cap = (st) => (L.capacity && L.capacity[st]) || 1;
+    W.full = (st) => ((W.others && W.others.get(st)) || []).length >= W.cap(st);
     W.info = (st) => { const sm = W.sims[st]; return { appr: sm.S.trains.filter((t) => !t.done && t.type !== "shunting" && sm.kindOf(t.seq[t.idx], t) === "approach").length }; };
     W.on = (f) => { listeners.push(f); return () => listeners.splice(listeners.indexOf(f), 1); };
     W.station = (st) => window.STATION_DATA[st];
@@ -230,6 +282,6 @@
     return W;
   }
 
-  window.LineWorld = { LINES, createWorld, generateLine, linkOf };
+  window.LineWorld = { LINES, createWorld, generateLine, generateDerived, linkOf };
   if (typeof module !== "undefined") module.exports = window.LineWorld;
 })();

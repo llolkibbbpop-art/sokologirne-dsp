@@ -79,11 +79,11 @@
       bc.onmessage = (m) => {
         const d = m.data; if (!d || d.to !== me) return;
         if (d.type === "ack") { clearTimeout(t); ok({ id: "host", send: (o) => bc.postMessage({ from: me, to: "host", type: "data", payload: o }), onData: (f) => h.data.push(f), onClose: (f) => h.close.push(f),
-          close: () => { bc.postMessage({ from: me, to: "host", type: "bye" }); bc.close(); h.close.forEach((f) => f()); } }); }
+          close: () => { try { bc.postMessage({ from: me, to: "host", type: "bye" }); bc.close(); } catch (e) { /* already closed */ } h.close.forEach((f) => f()); } }); }
         else if (d.type === "data") h.data.forEach((f) => f(d.payload));
         else if (d.type === "bye") { bc.close(); h.close.forEach((f) => f()); }
       };
-      window.addEventListener("beforeunload", () => bc.postMessage({ from: me, to: "host", type: "bye" }));
+      window.addEventListener("beforeunload", () => { try { bc.postMessage({ from: me, to: "host", type: "bye" }); } catch (e) { /* already closed */ } });
       bc.postMessage({ from: me, to: "host", type: "hello" });
     });
   }
@@ -93,18 +93,26 @@
   async function host(world, local, hooks) {
     const H = { role: "host", local, code: (local ? "L" : "") + rid(5), players: new Map(), cursors: {}, me: { id: "host", ...LOOKS[0] }, world };
     world.others = new Map();
-    const free = (st) => st !== world.player && !world.others.has(st) && ![...H.players.values()].some((p) => p.st === st);
+    const count = (st) => (st === world.player ? 1 : 0) + [...H.players.values()].filter((p) => p.st === st).length;
+    const cap = (st) => (world.L.capacity && world.L.capacity[st]) || 1;
+    const free = (st) => count(st) < cap(st);
     const roster = () => [{ id: "host", name: hooks.name(), st: world.player, view: hooks.view(), color: LOOKS[0].color, shape: LOOKS[0].shape, host: true }]
       .concat([...H.players.values()].map((p) => ({ id: p.id, name: p.name, st: p.st, view: p.view, color: p.color, shape: p.shape })));
     H.roster = roster;
-    const sync = () => { world.others = new Map([...H.players.values()].filter((p) => p.st).map((p) => [p.st, p.name])); hooks.onChange && hooks.onChange(); };
+    const sync = () => {
+      const m = new Map(); [...H.players.values()].filter((p) => p.st).forEach((p) => m.set(p.st, (m.get(p.st) || []).concat(p.name)));
+      world.others = m; hooks.onChange && hooks.onChange();
+    };
+    // a station nobody works any more goes back to the automatic dispatcher
+    const release = (st) => { if (st && count(st) === 0) world.sims[st].S.auto = true; };
     function onConn(c) {
       let p = null;
       c.onData((m) => {
         if (!m || !m.t) return;
         if (m.t === "hello") {
-          if (H.players.size >= world.L.stations.length - 1) { c.send({ t: "full", text: "У кімнаті вже " + world.L.stations.length + " гравців — по одному на станцію." }); setTimeout(() => c.close(), 300); return; }
-          const st = world.L.stations.find(free);
+          const maxP = world.L.stations.reduce((n, s2) => n + cap(s2), 0);
+          if (H.players.size + 1 >= maxP) { c.send({ t: "full", text: "У кімнаті вже " + maxP + " гравців — більше станції не приймають." }); setTimeout(() => c.close(), 300); return; }
+          const st = world.L.stations.find((s2) => count(s2) === 0) || world.L.stations.find(free);
           if (!st) { c.send({ t: "full", text: "Вільних станцій немає." }); setTimeout(() => c.close(), 300); return; }
           const used = new Set([...H.players.values()].map((x) => x.color));
           const look = LOOKS.slice(1).find((l) => !used.has(l.color)) || LOOKS[1];
@@ -123,14 +131,15 @@
           c.send({ t: "res", id: m.id, r: r && typeof r === "object" ? { ok: r.ok, err: r.err } : r });
         } else if (m.t === "switch") {
           const st = m.st;
-          if (m.watch) { if (p.st) world.sims[p.st].S.auto = true; p.st = null; p.view = st; }
+          const was = p.st;
+          if (m.watch) { p.st = null; p.view = st; release(was); }
           else if (!free(st)) { c.send({ t: "denied", text: "Станцію вже зайнято" }); return; }
-          else { if (p.st) world.sims[p.st].S.auto = true; p.st = st; p.view = st; world.sims[st].S.auto = false; }
+          else { p.st = st; p.view = st; world.sims[st].S.auto = false; release(was); }
           p.sRef = null; sync();
           c.send({ t: "assign", st: p.st, view: p.view });
         } else if (m.t === "cur") { H.cursors[p.id] = { x: m.x, y: m.y, view: p.view, at: Date.now() }; }
       });
-      c.onClose(() => { if (!p) return; H.players.delete(p.id); delete H.cursors[p.id]; if (p.st) { world.sims[p.st].S.auto = true; world.sims[p.st].log("sys", "Гравець " + p.name + " вийшов — станцію веде автодиспетчер"); } sync(); });
+      c.onClose(() => { if (!p) return; H.players.delete(p.id); delete H.cursors[p.id]; if (p.st) { release(p.st); world.sims[p.st].log("sys", "Гравець " + p.name + " вийшов" + (count(p.st) ? "" : " — станцію веде автодиспетчер")); } sync(); });
     }
     H.transport = await (local ? localHost(H.code, onConn) : peerHost(H.code, onConn));
     // state to every player, ~4 times a second

@@ -101,7 +101,7 @@
         const here = (sigAt[cur] || []).filter((s) => s.id !== sg.id);
         if (here.length) {
           here.forEach((s) => add(s.id, path, through));
-          if (stops >= 3) return;
+          if (stops >= (T.shuntStops || 3)) return;
           stops++;
           thr = through.concat(here.filter((s) => s.dir === sg.dir && s.kind !== "entry").map((s) => s.id));
         }
@@ -866,7 +866,7 @@
           if (ev.status !== "waiting") { ev.status = "waiting"; log("delay", "Поїзд " + ev.ev.train + " затримано на перегоні: блок " + start[0] + " зайнятий"); }
           continue;
         }
-        let pref = [ev.recTrack, ...((P.typeTracks && P.typeTracks[ev.ev.type]) || P.trackPreference[ev.parity])].filter((v, k, a) => v && a.indexOf(v) === k);
+        let pref = [ev.recTrack, ...(ev.ev.onlyTracks || (P.typeTracks && P.typeTracks[ev.ev.type]) || P.trackPreference[ev.parity])].filter((v, k, a) => v && a.indexOf(v) === k);
         // trains with passengers to board stop only at platform tracks
         if ((ev.ev.stopMin || ev.ev.action === "arrive") && ["passenger", "electric", "intercity", "suburban"].includes(ev.ev.type)) pref = pref.filter((t) => (P.platformTracks || []).includes(t));
         // only tracks from which the train can leave towards its line
