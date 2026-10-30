@@ -988,7 +988,7 @@
   function fitConsole() {
     if (!document.body.classList.contains("console-only")) { ui.vs = 1; return; }
     const wrap = $("schemeWrap"), bar = wrap.querySelector(".indbar");
-    const w = ZOOMS[ui.zoom] || wrap.clientWidth || window.innerWidth, want = window.innerHeight * 0.7 - (bar ? bar.offsetHeight : 0);
+    const w = zoomW() || wrap.clientWidth || window.innerWidth, want = window.innerHeight * 0.7 - (bar ? bar.offsetHeight : 0);
     ui.vs = Math.max(1, Math.min(4.5, want / ((w / BOX[2]) * VH)));
   }
   $("btnConsole").onclick = () => {
@@ -1081,21 +1081,44 @@
     if (now - lastRender > 120) { lastRender = now; refresh(); radio.tick(); }
     requestAnimationFrame(frame);
   }
-  // zoom: width of the diagram in px (0 = fit the window)
-  const ZOOMS = [0, 1300, 1700, 2200, 2900];
-  ui.zoom = KEEP.zoom != null ? KEEP.zoom : window.innerWidth >= 2200 ? 0 : 3;
+  // zoom: scale of the diagram (plan units → px; 0 = fit the window). A big station is wider than
+  // the window at the same scale and is scrolled left / right (scroll bar, drag with the mouse, Shift+wheel)
+  const ZOOMS = [0, 0.45, 0.6, 0.8, 1, 1.3];
+  const zoomW = () => (ZOOMS[ui.zoom] ? Math.round(BOX[2] * ZOOMS[ui.zoom]) : 0);
+  const fitScale = () => ($("schemeWrap").clientWidth || window.innerWidth) / BOX[2];
+  // the user's own choice is kept; by default the station fits the window unless it would become too small
+  ui.zoom = KEEP.zoom != null ? KEEP.zoom : fitScale() >= 0.62 ? 0 : fitScale() >= 0.5 ? 2 : 3;
   function applyZoom() {
-    const w = ZOOMS[ui.zoom];
+    const w = zoomW();
     svg.style.width = w ? w + "px" : "100%";
     svg.style.minWidth = w ? w + "px" : "0";
   }
   $("zoomSeg").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
-    const z = +b.dataset.z;
-    ui.zoom = KEEP.zoom = z === 0 ? 0 : Math.max(0, Math.min(ZOOMS.length - 1, ui.zoom + z));
+    const z = +b.dataset.z, wrap = $("schemeWrap"), mid = (wrap.scrollLeft + wrap.clientWidth / 2) / (svg.clientWidth || 1);
+    ui.zoom = KEEP.zoom = z === 0 ? 0 : Math.max(0, Math.min(ZOOMS.length - 1, (ui.zoom || (fitScale() >= 1 ? 4 : fitScale() >= 0.8 ? 3 : fitScale() >= 0.6 ? 2 : 1)) + (ui.zoom ? z : z > 0 ? 1 : 0)));
     applyZoom();
     if (document.body.classList.contains("console-only")) { fitConsole(); buildSvg(); }
+    // keep the middle of the view in place
+    wrap.scrollLeft = Math.max(0, mid * svg.clientWidth - wrap.clientWidth / 2);
   });
+  // drag the diagram left / right with the mouse (a click without a move still works as a click)
+  (function dragPan() {
+    const wrap = $("schemeWrap"); let d = null;
+    wrap.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || e.pointerType === "touch" || wrap.scrollWidth <= wrap.clientWidth + 2 || e.target.closest(".indbar")) return;
+      d = { x: e.clientX, y: e.clientY, sl: wrap.scrollLeft, moved: false, id: e.pointerId };
+    });
+    wrap.addEventListener("pointermove", (e) => {
+      if (!d || e.pointerId !== d.id) return;
+      const dx = e.clientX - d.x;
+      if (!d.moved && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(e.clientY - d.y)) { d.moved = true; wrap.classList.add("panning"); try { wrap.setPointerCapture(d.id); } catch (er) { /* ignore */ } }
+      if (d.moved) wrap.scrollLeft = d.sl - dx;
+    });
+    const end = () => { if (!d) return; const m = d.moved; d = null; wrap.classList.remove("panning"); if (m) { wrap.__dragged = true; setTimeout(() => (wrap.__dragged = false), 0); } };
+    wrap.addEventListener("pointerup", end); wrap.addEventListener("pointercancel", end);
+    wrap.addEventListener("click", (e) => { if (wrap.__dragged) { e.stopPropagation(); e.preventDefault(); wrap.__dragged = false; } }, true);
+  })();
   applyZoom();
   // drop-down tabs next to «?»: time, settings
   function dropToggle(btn, panel) {

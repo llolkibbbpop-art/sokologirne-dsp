@@ -57,6 +57,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .scheme-wrap { position: relative; background: #070a0b; border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
 .scheme-wrap svg { display: block; min-width: 1500px; width: 100%; height: auto; }
+.scheme-wrap.panning, .scheme-wrap.panning * { cursor: grabbing !important; user-select: none; }
 .toast { position: sticky; left: 0; display: block; min-height: 26px; padding: 4px 10px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); background: var(--panel); }
 .toast.err { color: var(--occ); }
 .toast.ok { color: var(--route); }
