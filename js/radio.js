@@ -40,11 +40,11 @@
       const n = ++R.inc[side];
       push({ kind: "in", side, train, no: n, text,
         head: ME + " із " + NB[side].from + ". ДСП " + NB[side].dsp + ". Телефонограма № " + n + ".",
-        due: now() + 180, need: "repeat" });
+        due: now() + 900, need: "repeat" });
     }
     // ---------- outgoing duty: the DSP must transmit (forms 3, 4, 11)
     function duty(side, text, train) {
-      push({ kind: "duty", side, train, text, due: now() + 180, need: "send" });
+      push({ kind: "duty", side, train, text, due: now() + 900, need: "send" });
     }
 
     function act(id, what) {
@@ -58,7 +58,7 @@
       } else if (m.need === "send") {
         const no = ++R.out[m.side];
         push({ kind: "me", text: NB[m.side].name + " із " + ME + ". ДСП " + ME + " " + me() + ". Телефонограма № " + no + ". " + m.text });
-        const rep = { kind: "nb", side: m.side, text: m.text + " ДСП " + NB[m.side].dsp + ".", need: "confirm", no, parent: m.id, due: now() + 120 };
+        const rep = { kind: "nb", side: m.side, text: m.text + " ДСП " + NB[m.side].dsp + ".", need: "confirm", no, parent: m.id, due: now() + 600 };
         m.need = null; m.ok = true;
         push(rep);
       } else if (m.need === "confirm") {
@@ -109,7 +109,7 @@
       });
       S.trains.forEach((tr) => {
         if (tr.done || tr.type === "shunting" || !tr.wait || !/чекає відкриття/.test(tr.wait)) return;
-        if (tr.waitSec < 30 || R.called[tr.id + tr.wait]) return;
+        if (tr.waitSec < 120 || R.called[tr.id + tr.wait]) return;
         R.called[tr.id + tr.wait] = true;
         const sig = tr.wait.replace("чекає відкриття ", "");
         push({ kind: "drv", train: tr.num, text: "ДСП " + ME + ", я машиніст поїзда № " + tr.num + ". Стою біля закритого світлофора " + sig + ".", need: "driver" });

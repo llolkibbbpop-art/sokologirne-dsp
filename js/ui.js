@@ -9,6 +9,8 @@
   const NS = "http://www.w3.org/2000/svg";
   // state that outlives one station screen (line mode switches stations without reloading)
   const KEEP = { running: true, speed: 1, autoCode: true, sound: true, radio: {} };
+  // a model day (24 h) takes 35 minutes of real time at ×1
+  const DAY_RATE = 86400 / (35 * 60);
   // timetable source: seeded generator (default) or the fixed JSON from the task
   const src = { kind: "gen", seed: 2014, level: "medium" };
 
@@ -422,12 +424,14 @@
     else if (s.kind === "sig") {
       const sg = D.signals[s.id], st = S.sig[s.id];
       const kindName = { entry: "вхідний", exit: "вихідний", shunt: "маневровий" }[sg.kind];
-      const rid = sim.routeFromSignal(s.id), rs = rid && S.routes[rid];
+      // a route the train is already running on does not stop a new route from this signal (the next train)
+      const rid = sim.routeFromSignal(s.id, ["setting", "set", "open", "cancelling"]) || sim.routeFromSignal(s.id), rs = rid && S.routes[rid];
+      const busyRid = rs && rs.state !== "used" ? rid : null;
       const hasTrain = sim.routesFrom(s.id, "train").length, hasShunt = sim.routesFrom(s.id, "shunt").length;
       h += `<dl class="kv"><dt>Світлофор</dt><dd><b>${esc(s.id)}</b> · ${kindName}</dd><dt>Показання</dt><dd>${st.open ? (st.aspect === "white" ? "білий — маневри дозволено" : "зелений — поїзд прийняти/відправити") : sg.kind === "shunt" ? "синій — маневри заборонено" : "червоний — заборонено"}${st.inv ? " + запрошувальний" : ""}${st.blocked ? " · ЗАБЛОКОВАНО" : ""}</dd>
         ${rid ? `<dt>Маршрут</dt><dd>${esc(rid)} — ${routeStateName[rs.state] || rs.state}</dd>` : ""}${sg.note ? `<dt>Примітка</dt><dd>${esc(sg.note)}</dd>` : ""}</dl><div class="menu">`;
-      if (hasTrain) h += B("pick", "train", "Встановити поїзний маршрут", { dis: !!rid || st.blocked });
-      if (hasShunt) h += B("pick", "shunt", "Встановити маневровий маршрут", { dis: !!rid || st.blocked });
+      if (hasTrain) h += B("pick", "train", "Встановити поїзний маршрут", { dis: !!busyRid || st.blocked });
+      if (hasShunt) h += B("pick", "shunt", "Встановити маневровий маршрут", { dis: !!busyRid || st.blocked });
       if (rid && rs.state !== "used") h += B("cancel", rid, rs.mode === "shunt" ? "Відмінити маневровий маршрут" : "Відмінити поїзний маршрут", { danger: true, dis: rs.state === "cancelling" });
       if (rid && rs.state === "set") h += B("open", s.id, "Повторно відкрити світлофор");
       if (st.open) h += B("close", s.id, "Закрити світлофор");
@@ -914,7 +918,7 @@
   // ---------- controls ----------
   function setRunning(r) { ui.running = KEEP.running = r; $("btnPlay").textContent = r ? "⏸ Пауза" : "▶ Пуск"; $("btnPlay").classList.toggle("on", r); }
   $("btnPlay").onclick = () => { if (hostOnly()) return; if (sim.S.paused) { toast("Доба завершена. Скиньте добу або оберіть «новий день».", "err"); return; } setRunning(!ui.running); };
-  $("speedSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b || hostOnly()) return; ui.speed = KEEP.speed = +b.dataset.s; [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", x === b)); sim.log("cmd", "Швидкість x" + ui.speed); renderLog(); });
+  $("speedSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b || hostOnly()) return; ui.speed = KEEP.speed = +b.dataset.s; [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", x === b)); sim.log("cmd", "Швидкість ×" + ui.speed + " (доба за " + Math.round(35 / ui.speed) + " хв)"); renderLog(); });
   $("btnReset").onclick = () => {
     if (hostOnly()) return;
     if (W) { W.playerAuto = $("chkAuto").checked; W.endMode = $("selEnd").value; W.shunting = $("chkShunt").checked; W.reset(); }
@@ -1044,11 +1048,17 @@
   let acc = 0, last = performance.now(), lastRender = 0;
   function frame(now) {
     if (!alive) return;
+    // a player shows the host's clock state
+    if (REMOTE && (ui.running !== KEEP.running || ui.speed !== KEEP.speed)) {
+      ui.running = KEEP.running; ui.speed = KEEP.speed;
+      $("btnPlay").textContent = ui.running ? "⏸ Пауза" : "▶ Пуск"; $("btnPlay").classList.toggle("on", ui.running);
+      [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", +x.dataset.s === ui.speed));
+    }
     const dt = Math.min(0.5, (now - last) / 1000); last = now;
     if (ui.running && !sim.S.paused) {
-      acc += dt * ui.speed;
+      acc += dt * ui.speed * DAY_RATE;
       let n = 0;
-      while (acc >= 1 && n < 900 && !sim.S.paused) { if (W) W.step(); else sim.step(); acc -= 1; n++; }
+      while (acc >= 1 && n < 4000 && !sim.S.paused) { if (W) W.step(); else sim.step(); acc -= 1; n++; }
       if (W) { const bad = Object.keys(W.sims).find((k) => W.sims[k].S.accident); if (bad && bad !== ctx.st) { acc = 0; const a = W.sims[bad].S.accident; toast("Аварія на ст. " + SD[bad].name + ": " + a.text + ". Ділянку перезапущено.", "err"); W.reset(); refresh(true); } }
       if (sim.S.accident) { acc = 0; handleAccident(); }
       else if (sim.S.paused) setRunning(false);
@@ -1080,6 +1090,9 @@
   dropToggle("btnTime", "timePanel"); dropToggle("btnSet", "settings"); dropToggle("btnStation", "stationPanel"); dropToggle("btnLineSt", "lineStPanel");
   document.addEventListener("click", () => document.querySelectorAll(".drop-panel").forEach((p) => (p.hidden = true)));
   setRunning(ui.running);
+  ["btnPlay", "btnReset", "btnSkip", "selEnd", "chkShunt", "selLevel", "btnGen", "btnNewSeed", "inSeed", "selSrc"].forEach((id) => { if ($(id)) $(id).disabled = REMOTE; });
+  [...$("speedSeg").children].forEach((x) => (x.disabled = REMOTE));
+  $("timeNote").textContent = REMOTE ? "Часом, швидкістю і графіком керує лише той, хто створив кімнату (ведучий)." : "×1 — модельна доба за 35 хв реального часу.";
   [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", +x.dataset.s === ui.speed));
   $("chkCode").checked = ui.autoCode; $("chkSound").checked = ui.sound;
   if (W) { $("selEnd").value = W.endMode; $("chkShunt").checked = W.shunting; $("inSeed").value = W.seed; $("selLevel").value = W.level; }

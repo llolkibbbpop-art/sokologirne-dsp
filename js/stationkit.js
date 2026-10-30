@@ -28,6 +28,32 @@
       }
       return [a, b, sec];
     });
+    // a block joint must not sit on a bend (the double line would show a notch): where two sections meet
+    // at a corner, the joint is moved a little along the straight (horizontal) side
+    (function moveJointsOffBends() {
+      const at = {}; edges.forEach((e, i) => [e[0], e[1]].forEach((n) => (at[n] = at[n] || []).push(i)));
+      const swNode = new Set(SW.map((s) => s[1])), parkIds = new Set((def.park || []).map((t) => t.id));
+      Object.entries(at).forEach(([n, list]) => {
+        if (list.length !== 2 || swNode.has(n)) return;
+        const [e1, e2] = list.map((i) => edges[i]);
+        if (e1[2] === e2[2]) return;
+        if (parkIds.has(e1[2]) || parkIds.has(e2[2])) return;   // a station track: its end is drawn straight in the station file
+        const far = (e) => (e[0] === n ? e[1] : e[0]);
+        const v = (e) => { const p = N[n], q = N[far(e)]; return [q[0] - p[0], q[1] - p[1]]; };
+        const [a1, a2] = [v(e1), v(e2)];
+        if (Math.abs(a1[0] * a2[1] - a1[1] * a2[0]) < 1e-6) return;   // straight: no bend
+        // split a side that is not a park track (routes run along park tracks end to end), horizontal first
+        const len = (i) => Math.hypot(v(edges[i])[0], v(edges[i])[1]);
+        const cand = [list[0], list[1]].filter((i) => !parkIds.has(edges[i][2]) && len(i) > 40).sort((x, y) => (v(edges[x])[1] === 0 ? 0 : 1) - (v(edges[y])[1] === 0 ? 0 : 1));
+        const hi = cand[0];
+        if (hi == null) return;
+        const eh = edges[hi], other = edges[list[0] === hi ? list[1] : list[0]], q = far(eh), vv = v(eh), L0 = Math.hypot(vv[0], vv[1]);
+        const nn = n + "~j"; N[nn] = [N[n][0] + Math.round(22 * vv[0] / L0), N[n][1] + Math.round(22 * vv[1] / L0)];
+        edges[hi] = [n, nn, other[2]];
+        edges.push([nn, q, eh[2]]);
+        SW.forEach((sw) => { if (sw[1] === q) [2, 3, 4].forEach((k) => { if (sw[k] === n) sw[k] = nn; }); });
+      });
+    })();
     const secOf = {}; edges.forEach(([a, b, s]) => (secOf[a + "|" + b] = secOf[b + "|" + a] = s));
     const info = Object.assign({}, def.info || {});
     (def.park || []).forEach((t) => (info[t.id] = { kind: "track", len: t.len, label: t.label || "Колія " + t.id.replace("П", "") + " (" + t.len + " м)", source: "plan" }));

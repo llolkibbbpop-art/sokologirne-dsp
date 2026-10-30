@@ -583,3 +583,6 @@ body.line-mode #netDrop { display: block; }
 #lineStDrop { display: none; }
 body.line-mode #lineStDrop { display: block; }
 .st-list .st-note { font-size: 12px; color: var(--muted); margin: 0 0 4px; line-height: 1.35; }
+
+.dp-note { font-size: 12px; color: var(--muted); margin: 4px 0 0; max-width: 300px; line-height: 1.35; }
+#timePanel button:disabled, #settings :disabled { opacity: .45; cursor: not-allowed; }
