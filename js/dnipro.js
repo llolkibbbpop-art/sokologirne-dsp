@@ -63,7 +63,7 @@
   side("r", false);
   edges.push(["U2r", "B"], ["B", "K4r"], ["U1r", "EAU"], ["L1sr", "EAL"], ["EAU", "BAu", "1НА"], ["BAu", "AAu", "2НА"], ["EAL", "BAl", "1ЧА"], ["BAl", "AAl", "2ЧА"]);
   const T = K.build({
-    meta: { id: "dnipro", station: "Дніпропетровськ", planDate: "22.01.2016", shuntToTracks: true, rightParity: "even", lockFrame: true },
+    meta: { id: "dnipro", station: "Дніпро-Головний", planDate: "22.01.2016", shuntToTracks: true, rightParity: "even", lockFrame: true },
     nodes, switches: sw, edges,
     park: PARK.map(([id, name, , len]) => ({ id, L: "L" + id, R: "R" + id, len, sigL: "Н" + name, sigR: "Ч" + name, name, label: "Колія " + name + " (" + len + " м)" })),
     lines: [
@@ -86,7 +86,7 @@
       borders: [],
       blockLabels: [["2КД", -110, 170, -13], ["1КД", -15, 170, -13], ["2НГ", -110, 380, -13], ["1НГ", -15, 380, -13], ["2ЧГ", -110, 415, 20], ["1ЧГ", -15, 415, 20],
         ["1НА", 2800, 380, -13], ["2НА", 2900, 380, -13], ["1ЧА", 2800, 415, 20], ["2ЧА", 2900, 415, 20]],
-      graph: ["Горяїнове", "Дніпропетровськ", "Пост Амур"]
+      graph: ["Горяїнове", "Дніпро-Гол.", "Пост Амур"]
     },
     radio: { sides: { K: { name: "Кайдацька", from: "Кайдацької", dsp: "Бондар", inc: 15 }, G: { name: "Горяїнове", from: "Горяїнового", dsp: "Мельник", inc: 30 }, A: { name: "Пост Амур", from: "Пост Амура", dsp: "Савченко", inc: 45 } },
       bySignal: { "ЧК": "K", "ЧГ": "G", "Н": "A" }, byLine: { "2КД": "K", "2НГ": "G", "2ЧА": "A" }, odd: {}, even: {} },
@@ -133,9 +133,9 @@
       (busy[trk] = busy[trk] || []).push([ta - 6, td + 4]);
       const pin = fl === "A" ? "odd" : "even", pout = parityTo(tl);
       const n = G.num(6001, 398, pin === "odd"), c = String(n), back = String(G.num(6001, 398, pout === "odd"));
-      ev.push({ time: K.hm(ta), train: c, type: "electric", direction: pin, action: "arrive", consist: c, ready: true, entry: LINE[fl].entry, recTrack: trk, from: G.pick(PLACE[fl]), to: "Дніпропетровськ", timeStatus: "generated",
+      ev.push({ time: K.hm(ta), train: c, type: "electric", direction: pin, action: "arrive", consist: c, ready: true, entry: LINE[fl].entry, recTrack: trk, from: G.pick(PLACE[fl]), to: "Дніпро-Головний", timeStatus: "generated",
         note: "кінцева: зворотний рейс № " + back + " о " + K.hm(td) });
-      ev.push({ time: K.hm(td), train: back, type: "electric", direction: pout, action: "depart", consist: c, exitTo: LINE[tl].exit, from: "Дніпропетровськ", to: G.pick(PLACE[tl]), timeStatus: "generated", note: "відправлення состава поїзда № " + c });
+      ev.push({ time: K.hm(td), train: back, type: "electric", direction: pout, action: "depart", consist: c, exitTo: LINE[tl].exit, from: "Дніпро-Головний", to: G.pick(PLACE[tl]), timeStatus: "generated", note: "відправлення состава поїзда № " + c });
       return true;
     }
     const tryN = (n, f) => { for (let i = 0; i < n; i++) for (let a = 0; a < 8 && !f(i, n); a++); };
@@ -150,8 +150,8 @@
     tryN(Math.max(1, Math.round(2 * k)), () => (G.r() < 0.5 ? through("freight", "K", "A", G.ri(0, 1400), 0) : through("freight", "A", "K", G.ri(0, 1400), 0)));
     tryN(Math.max(1, Math.round(2 * k)), () => { const [f, t] = pair(); return through("reserve", f, t, G.ri(0, 1400), 0); });
     ev.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
-    return { scheduleId: "dnipro_" + seed + "_" + intensity + "_d" + day, station: "Дніпропетровськ", generated: true, events: ev };
+    return { scheduleId: "dnipro_" + seed + "_" + intensity + "_d" + day, station: "Дніпро-Головний", generated: true, events: ev };
   }
   window.STATION_DATA = window.STATION_DATA || {};
-  window.STATION_DATA.dnipro = { id: "dnipro", name: "Дніпропетровськ", note: "пасажирська, 18 колій (спрощено): Горяїнове, Кайдацька — Пост Амур", TOPOLOGY: T, MODEL_PARAMS: P, generate, line: LINE };
+  window.STATION_DATA.dnipro = { id: "dnipro", name: "Дніпро-Головний", note: "на плані 2016 р. — Дніпропетровськ; пасажирська, 18 колій (спрощено)", TOPOLOGY: T, MODEL_PARAMS: P, generate, line: LINE };
 })();
