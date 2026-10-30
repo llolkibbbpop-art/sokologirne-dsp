@@ -892,7 +892,7 @@
       return `<button class="ls-st${id === ctx.st ? " me" : busy ? " other" : ""}" data-ls="${id}" title="${busy ? "станцією керує інший гравець — клацніть, щоб спостерігати" : "перейти на станцію"}"><b>${esc(SDx[id].name)}${id === ctx.st && RO ? " · спостереження" : ""}</b><span>${tag(id)}${appr(id) ? " · на підході " + appr(id) : ""}</span></button>`; };
     const gap = (a, b) => { const ln = L.links.find((l) => (l[0] === a && l[2] === b) || (l[0] === b && l[2] === a));
       const on = tr.filter((x) => (x.from === a && x.to === b) || (x.from === b && x.to === a));
-      return `<div class="ls-gap${ln && ln[5] ? " single" : ""}">${on.length ? on.map((x) => `<span class="tr">${x.from === a ? "→" : "←"} № ${esc(x.train)}</span>`).join("") : "<span>перегін вільний</span>"}</div>`; };
+      return `<div class="ls-gap${ln && ln[5] ? " single" : ""}">${on.length ? on.map((x) => `<span class="tr">${x.from === a ? "→" : "←"} № ${esc(x.train)}</span>`).join("") : "<span>вільно</span>"}</div>`; };
     const order = L.order || L.stations, ends = L.ends || ["", ""];
     let html = ends[0] ? `<div class="ls-end">${esc(ends[0])}</div>` : "";
     order.forEach((id, i) => { html += cell(id); if (i < order.length - 1) html += gap(id, order[i + 1]); });

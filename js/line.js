@@ -12,12 +12,16 @@
   const K = window.StationKit;
   const LINES = {
     sh: {
-      id: "sh", name: "Сиваш — Генічеськ", note: "маршрут: Сиваш → Салькове → Новоолексіївка → Генічеськ",
-      stations: ["sivash", "salkove", "novooleksiivka", "henichesk"],
+      id: "sh", name: "Джанкой — Генічеськ", note: "маршрут: Джанкой → Мамут → Солоне Озеро → Сиваш → Салькове → Новоолексіївка → Генічеськ; на Джанкої — до 2 гравців",
+      stations: ["dzhankoi", "mamut", "soloneozero", "sivash", "salkove", "novooleksiivka", "henichesk"],
       // [station A, line key at A, station B, line key at B, running time (min), single-track]
-      links: [["sivash", "S", "salkove", "V", 6, false], ["salkove", "N", "novooleksiivka", "S", 7, false], ["novooleksiivka", "G", "henichesk", "N", 10, true]],
-      outer: { "sivash:D": "Солоне Озеро (Джанкой)", "novooleksiivka:P": "Партизани (Мелітополь)" },
-      order: ["sivash", "salkove", "novooleksiivka", "henichesk"], ends: ["← Солоне Озеро", ""]
+      links: [["dzhankoi", "M", "mamut", "D", 7, false], ["mamut", "S", "soloneozero", "M", 6, false], ["soloneozero", "V", "sivash", "D", 6, false],
+        ["sivash", "S", "salkove", "V", 6, false], ["salkove", "N", "novooleksiivka", "S", 7, false], ["novooleksiivka", "G", "henichesk", "N", 10, true]],
+      outer: { "dzhankoi:S": "Сімферополь", "dzhankoi:B": "Вадим", "dzhankoi:F": "Владиславівка", "novooleksiivka:P": "Партизани (Мелітополь)" },
+      order: ["dzhankoi", "mamut", "soloneozero", "sivash", "salkove", "novooleksiivka", "henichesk"], ends: ["← Сімферополь · Вадим · Владиславівка", ""],
+      capacity: { dzhankoi: 2 },
+      // the big station keeps its own trains on the lines that leave the route, and all its shunting
+      local: { dzhankoi: "M", to: "P>J", from: "J>P" }
     },
     dn: {
       id: "dn", name: "Дніпро-Головний — Пост Амур", note: "маршрут: Дніпро-Головний → Пост Амур (Нижньодніпровськ); на Дніпрі-Головному — до 2 гравців",
@@ -72,15 +76,19 @@
 
   // ------------------------------------------------------------ the line timetable
   // a journey is a list of hops [station, line in, line out, stop min]; the time at a station is its arrival
+  const TOJ = [["soloneozero", "V", "M"], ["mamut", "S", "D"]];        // Сиваш → Джанкой
+  const FROMJ = [["mamut", "D", "S"], ["soloneozero", "M", "V"]];      // Джанкой → Сиваш
   const PATH = {
-    "P>D": [["novooleksiivka", "P", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]],
-    "D>P": [["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "P"]],
+    "P>D": [["novooleksiivka", "P", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]].concat(TOJ, [["dzhankoi", "M", "S"]]),
+    "D>P": [["dzhankoi", "S", "M"]].concat(FROMJ, [["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "P"]]),
+    "P>J": [["novooleksiivka", "P", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]].concat(TOJ, [["dzhankoi", "M", null]]),
+    "J>P": [["dzhankoi", null, "M"]].concat(FROMJ, [["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "P"]]),
     "P>G": [["novooleksiivka", "P", "G"], ["henichesk", "N", null]],
-    "D>G": [["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "G"], ["henichesk", "N", null]],
+    "D>G": [["dzhankoi", "S", "M"]].concat(FROMJ, [["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "G"], ["henichesk", "N", null]]),
     "G>P": [["henichesk", null, "N"], ["novooleksiivka", "G", "P"]],
-    "G>D": [["henichesk", null, "N"], ["novooleksiivka", "G", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]]
+    "G>D": [["henichesk", null, "N"], ["novooleksiivka", "G", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]].concat(TOJ, [["dzhankoi", "M", "S"]])
   };
-  const PLACE = { P: "Мелітополь", D: "Джанкой", G: "Генічеськ" };
+  const PLACE = { P: "Мелітополь", D: "Сімферополь", J: "Джанкой", G: "Генічеськ" };
   function linkOf(L, st, key) {
     for (const l of L.links) {
       if (l[0] === st && l[1] === key) return { to: l[2], toKey: l[3], run: l[4], single: l[5], link: l };
@@ -88,6 +96,7 @@
     }
     return null;
   }
+  const pmin = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
   const oppo = (p) => (p === "odd" ? "even" : "odd");
 
   function generateLine(L, seed, level, day) {
@@ -128,10 +137,10 @@
     }
     // per-station events of one journey
     function emit(path, ts, stops, o) {
-      const id = "d" + day + "-j" + ++jn;
+      const id = o.lineId || "d" + day + "-j" + ++jn;
       path.forEach(([st, inK, outK], i) => {
         const SD = window.STATION_DATA[st], T = SD.TOPOLOGY;
-        const prev = i > 0, next = i < path.length - 1 ? { st: path[i + 1][0], run: linkOf(L, st, outK).run } : null;
+        const prev = i > 0 || !!o.headHold, next = i < path.length - 1 ? { st: path[i + 1][0], run: linkOf(L, st, outK).run } : o.tailNext || null;
         const base = { train: o.num, type: o.type, from: o.from, to: o.to, lineId: id, hold: prev || undefined, next: next || undefined, timeStatus: "generated" };
         if (!outK) { // arrival at the terminus
           out[st].push(Object.assign(base, { time: K.hm(ts[i]), direction: "arr", action: "arrive", consist: o.num, ready: !o.run, entry: T.lineByKey[inK].entry, recTrack: o.track,
@@ -149,7 +158,7 @@
           recTrack: rec || undefined, note: (stop ? "зупинка " + stop + " хв" : "без зупинки") + " · " + o.from + " → " + o.to }));
       });
     }
-    const odd = (d) => d.endsWith("D") || d.endsWith("G");
+    const odd = (d) => d.endsWith("D") || d.endsWith("G") || d.endsWith("J");
     const num = (type, dir) => G.num(type === "passenger" ? 1 : type === "electric" ? 6401 : type === "reserve" ? 4901 : 2001, type === "freight" ? 898 : type === "passenger" ? 140 : 98, odd(dir));
     function journey(dir, type, t, stopFn, extra) {
       const path = PATH[dir], stops = path.map((h, i) => stopFn(h, i));
@@ -170,7 +179,9 @@
         const trk = tracks.find((p) => free(p, ta - 8, td + 4) && (!needRun || free(p === "IIП" ? "1П" : "IIП", ta + 5, ta + 40)));
         if (!trk) continue;
         const b = journey(outDir, type, td, type === "electric" ? elStop : (h) => (h[0] === "novooleksiivka" ? 2 : 0), { consist: a.o.num }); if (!b) continue;
-        hold(trk, ta - 8, td + 4); if (needRun) hold(trk === "IIП" ? "1П" : "IIП", ta + 5, ta + 40);
+        // the departure may have been moved later to fit the line: the track is held until then
+        if (!free(trk, ta - 8, b.ts[0] + 4)) continue;
+        hold(trk, ta - 8, b.ts[0] + 4); if (needRun) hold(trk === "IIП" ? "1П" : "IIП", ta + 5, ta + 40);
         a.o.track = trk; a.o.run = needRun; a.o.back = b.o.num;
         a.emit(); b.emit();
         if (needRun) out.henichesk.push({ time: K.hm(ta + 10), train: "МН-Г" + jn, type: "shunting", direction: "station", action: "shunting_sequence", job: "RUN", consist: a.o.num, timeStatus: "generated", note: "обгін локомотива поїзда № " + a.o.num });
@@ -179,22 +190,54 @@
       return false;
     }
     const pd = () => (G.r() < 0.5 ? ["P>D", "D>P"] : ["D>P", "P>D"]);
-    // електропоїзди: Мелітополь — Генічеськ is the main suburban flow
+    const stand = (h) => (h[0] === "dzhankoi" ? G.ri(10, 20) : h[0] === "novooleksiivka" && G.r() < 0.6 ? 2 : 0);
+    // електропоїзди: Мелітополь — Генічеськ is the main suburban flow (Мелітополь — Джанкой come from Джанкой's own timetable)
     tryN(Math.max(5, Math.round(8 * k)), (i, n) => gPair("electric", "P>G", "G>P", 300 + (i + 0.5) * (1000 / n) + G.ri(-20, 20), G.ri(20, 40), false));
-    tryN(Math.max(1, Math.round(2 * k)), (i, n) => gPair("electric", "D>G", "G>D", 330 + (i + 0.5) * (900 / n) + G.ri(-20, 20), G.ri(25, 45), false));
-    tryN(Math.max(4, Math.round(6 * k)), () => { const j = journey(pd()[0], "electric", G.ri(270, 1300), elStop); if (j) j.emit(); return !!j; });
-    // passenger: through to Крим; seasonal to Генічеськ with a long layover
-    tryN(Math.max(2, Math.round(4 * k)), () => { const d = pd()[0]; const j = journey(d, "passenger", G.ri(10, 1300), (h) => (h[0] === "novooleksiivka" && G.r() < 0.6 ? 2 : 0),
+    // passenger: through to Крим (a long stand at Джанкой); seasonal to Генічеськ with a long layover
+    tryN(Math.max(2, Math.round(4 * k)), () => { const d = pd()[0]; const j = journey(d, "passenger", G.ri(10, 1250), stand,
       { from: d[0] === "P" ? G.pick(["Київ", "Харків", "Запоріжжя-1"]) : G.pick(["Сімферополь", "Севастополь"]), to: d[0] === "P" ? G.pick(["Сімферополь", "Євпаторія"]) : G.pick(["Київ", "Дніпропетровськ"]) }); if (j) j.emit(); return !!j; });
     tryN(Math.max(1, Math.round(1.5 * k)), () => gPair("passenger", "P>G", "G>P", G.ri(300, 900), G.ri(90, 180), true));
     // freight: the main line; Генічеськ gets one at most
-    tryN(Math.max(3, Math.round(7 * k)), () => { const j = journey(pd()[0], "freight", G.ri(10, 1350), () => 0); if (j) j.emit(); return !!j; });
+    tryN(Math.max(3, Math.round(7 * k)), () => { const j = journey(pd()[0], "freight", G.ri(10, 1300), () => 0); if (j) j.emit(); return !!j; });
     if (G.r() < 0.5) tryN(1, () => gPair("freight", "P>G", "G>P", G.ri(400, 900), G.ri(80, 140), true));
-    tryN(Math.max(1, Math.round(2 * k)), () => { const j = journey(pd()[0], "reserve", G.ri(10, 1350), () => 0); if (j) j.emit(); return !!j; });
-    // each station's own shunting work
+    tryN(Math.max(1, Math.round(2 * k)), () => { const j = journey(pd()[0], "reserve", G.ri(10, 1300), () => 0); if (j) j.emit(); return !!j; });
+    // each station's own shunting work; a big station (L.local) keeps also its own trains on the lines off the route
     L.stations.forEach((st) => {
-      const own = window.STATION_DATA[st].generate(seed, level, day).events.filter((e) => e.type === "shunting" && e.job !== "RUN");
-      own.forEach((e) => out[st].push(Object.assign({}, e)));
+      const evs = window.STATION_DATA[st].generate(seed, level, day).events;
+      const lk = L.local && st !== "to" && st !== "from" && L.local[st];
+      if (lk) {
+        // its trains to / from the route line run along the whole route (to / from Мелітополь)
+        const LB = window.STATION_DATA[st].TOPOLOGY.lineByKey[lk], drop = new Set(), keep = [], later = [];
+        const toSt = PATH[L.local.to], fromSt = PATH[L.local.from];
+        const stopOf = (e) => (h) => (e.type === "electric" ? 1 : e.type === "passenger" && h[0] === "novooleksiivka" ? 2 : 0);
+        evs.forEach((e0) => {
+          const e = Object.assign({}, e0);
+          if (e.entry === LB.entry) {
+            const path = toSt.slice(0, -1), sf = stopOf(e), stops = path.map(sf), ts = new Array(path.length);
+            let t = pmin(e.time);
+            for (let i = path.length - 1; i >= 0; i--) { const ln = linkOf(L, path[i][0], path[i][2]); t -= (stops[i] ? Math.max(stops[i], 5) : 0) + ln.run + 8; ts[i] = t; }
+            if (ts[0] < 5) { drop.add(e.grp || e.train); return; }
+            const id = "d" + day + "-l" + ++jn;
+            later.push([e, () => emit(path, ts, stops, { num: e.train, type: e.type, from: e.from, to: e.to, lineId: id, tailNext: { st, run: linkOf(L, st, lk).run } })]);
+            e.lineId = id; e.hold = true;
+          }
+          if (e.exitTo === LB.exit) {
+            const path = fromSt.slice(1), sf = stopOf(e), stops = path.map(sf), ln0 = linkOf(L, st, lk);
+            const t0 = pmin(e.time) + (e.action === "depart" ? 0 : e.stopMin ? Math.max(e.stopMin, 5) : 0) + ln0.run + 8;
+            const ts = plan(path, t0, stops);
+            if (!ts) { drop.add(e.grp || e.train); return; }
+            const id = "d" + day + "-l" + ++jn;
+            later.push([e, () => emit(path, ts, stops, { num: e.train, type: e.type, from: e.from, to: e.to, lineId: id, headHold: true })]);
+            e.lineId = id; e.next = { st: ln0.to, run: ln0.run };
+          }
+          keep.push(e);
+        });
+        const dropped = (e) => drop.has(e.grp || e.train);
+        keep.filter((e) => !dropped(e)).forEach((e) => out[st].push(e));
+        later.forEach(([e, f]) => { if (!dropped(e)) f(); });
+        return;
+      }
+      evs.filter((e) => e.type === "shunting" && e.job !== "RUN").forEach((e) => out[st].push(Object.assign({}, e)));
     });
     const res = {};
     L.stations.forEach((st) => {
