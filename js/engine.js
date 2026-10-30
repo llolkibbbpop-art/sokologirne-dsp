@@ -180,6 +180,8 @@
     const entryOf = (tr) => tr.entry || T.entrySignal[tr.parity];
     const stepGoal = (tr) => (tr.shunt ? tr.shunt.plan[tr.shunt.step] || {} : {});
     const endsOf = (goal) => [].concat(goal.end == null ? [] : goal.end);
+    // the direction a shunting step goes in: "@L"/"@R", or the direction of the signal named in the plan
+    const stepDir = (tr) => { const g = stepGoal(tr); if (!g.sig) return null; return g.sig[0] === "@" ? g.sig[1] : (D.signals[g.sig] || {}).dir || null; };
     // a plan step may name its signal as "@L"/"@R": the signal of that direction facing where the movement stands
     function resolveShuntSig(tr) {
       const goal = stepGoal(tr); if (!goal.sig) return null;
@@ -258,6 +260,9 @@
       const lastSec = R.sections[R.sections.length - 1];
       for (const s of R.sections) {
         const st = S.sec[s];
+        // a shunting route may end on a track with standing wagons (to couple) — never onto a train
+        const occTr = st.occ != null ? S.trains.find((t) => t.id === st.occ) : null;
+        if (R.type === "shunt" && occTr && !occTr.shunt && !occTr.done) return "Секція " + s + ": там поїзд " + occTr.num + " — маневровий рух на поїзд заборонено";
         const toOccupiedTrack = R.type === "shunt" && s === lastSec && D.sections[s].kind === "track" && !st.lock && !(st.occ != null && isMoving(st.occ));
         if (toOccupiedTrack && (st.occ != null || st.wagons)) continue;
         if (st.wagons) return "Секція " + s + " зайнята вагонами";
@@ -641,6 +646,7 @@
         // the plan moves on only when the DSP gave the route the task asks for
         const goal = stepGoal(tr), ends = endsOf(goal);
         if (!goal.sig || !ends.length || R.ends.some((e) => ends.includes(e)) || ends.includes(R.to)) tr.shunt.step++;
+        else if (stepDir(tr) && D.signals[sig].dir === stepDir(tr)) log("train", "Маневровий " + tr.num + ": проміжний маршрут " + rid + ", далі — до " + ends.join(" або "));
         else log("warn", "Маневровий " + tr.num + ": маршрут " + rid + " не за завданням (потрібен кінець " + ends.join(" або ") + ") — після нього поверніть склад за планом");
       }
       if (D.signals[sig].kind === "exit" && tr.type !== "shunting") { tr.passedAt = S.time; tr.marks.depart = S.time; }
@@ -722,7 +728,15 @@
         let sig = tr.nextSignal, rid = sig && routeFromSignal(sig, ["open"]), lead = null;
         if (tr.loco || tr.shunt) {
           rid = null;
-          const facing = signalsFacing(h).filter((sg) => !tr.shunt || sg.id === tr.nextSignal);
+          // the automatic dispatcher keeps to the plan's signal; the DSP may choose its own way: any open
+          // shunting route from a signal facing the step's direction (the side the movement has to go)
+          const dir = tr.shunt && stepDir(tr);
+          const facing = signalsFacing(h).filter((sg) => !tr.shunt || (autoOn(tr) ? sg.id === tr.nextSignal : !dir || sg.dir === dir));
+          if (tr.shunt && !autoOn(tr) && dir) {
+            const wrong = signalsFacing(h).find((sg) => sg.dir !== dir && Object.keys(S.routes).some((k) => routeDef(k).from === sg.id && S.routes[k].state === "open" && S.routes[k].mode === "shunt"));
+            if (wrong) { const w = "маршрут від " + wrong.id + " — у протилежний бік, за завданням треба " + (dir === "L" ? "ліворуч" : "праворуч"); if (tr.wrongWay !== w) { tr.wrongWay = w; log("warn", "Маневровий " + tr.num + ": " + w); } tr.wait = w; tr.status = "стоїть: " + w; tr.waitSec++; return; }
+            tr.wrongWay = null;
+          }
           for (const sg of facing) {
             const r = Object.keys(S.routes).find((k) => routeDef(k).from === sg.id && S.routes[k].state === "open" && S.routes[k].mode === "shunt");
             if (r) {
@@ -769,7 +783,8 @@
         if (bad) { accident(tr, bad[0]); return; }
       }
       const coupling = tr.type === "shunting" && ns.wagons && tr.idx + 1 === tr.seq.length - 1;
-      const ontoStanding = tr.type === "shunting" && ns.occ != null && ns.occ !== tr.id && !isMoving(ns.occ) && tr.idx + 1 === tr.seq.length - 1 && D.sections[next].kind === "track";
+      const nsTr = ns.occ != null ? S.trains.find((t) => t.id === ns.occ) : null;
+      const ontoStanding = tr.type === "shunting" && nsTr && nsTr.shunt && ns.occ !== tr.id && !isMoving(ns.occ) && tr.idx + 1 === tr.seq.length - 1 && D.sections[next].kind === "track";
       if (((ns.occ != null && ns.occ !== tr.id) && !ontoStanding) || (ns.wagons && !coupling) || (ns.falseOcc && tr.lim[tr.idx + 1] !== 20)) {
         if (!tr.wait) { tr.wait = "секція " + next + " зайнята"; log("warn", trainLabel(tr.id) + ": " + tr.wait); }
         tr.waitSec++; return;

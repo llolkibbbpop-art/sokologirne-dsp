@@ -661,9 +661,10 @@
     if (st.leave) return st.ready ? "виставити состав для відправлення" : "відчепити й залишити вагони";
     if (st.couple) return "причепити вагони";
     if (st.attach) return "причепитися до состава з боку відправлення";
+    const dir = st.sig && (st.sig[0] === "@" ? st.sig[1] : (D.signals[st.sig] || {}).dir);
     const sig = st.sig && st.sig[0] === "@" && sigNow ? "<b>" + esc(sigNow) + "</b>" : st.sig && st.sig[0] === "@" ? "світлофор " + (st.sig[1] === "L" ? "у бік лівої горловини" : "у бік правої горловини") + ", що стоїть перед локомотивом" : "<b>" + esc(st.sig) + "</b>";
     const end = [].concat(st.end).map(esc).join(" або ");
-    return sig + " → «Встановити маневровий маршрут» → кінець <b>" + end + "</b>" + (st.txt ? " (" + esc(st.txt) + ")" : "");
+    return "<b>" + (dir === "L" ? "← ліворуч" : "праворуч →") + "</b> до <b>" + end + "</b> маневровими маршрутами (шлях обираєте ви; найпростіше: " + sig + " → кінець " + end + ")" + (st.txt ? " — " + esc(st.txt) : "");
   }
   function adviceHtml(ev) {
     const job = ev.ev.job && (ev.plan || P.shuntingJobs[ev.ev.job]);

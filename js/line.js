@@ -198,9 +198,11 @@
       { from: d[0] === "P" ? G.pick(["Київ", "Харків", "Запоріжжя-1"]) : G.pick(["Сімферополь", "Севастополь"]), to: d[0] === "P" ? G.pick(["Сімферополь", "Євпаторія"]) : G.pick(["Київ", "Дніпропетровськ"]) }); if (j) j.emit(); return !!j; });
     tryN(Math.max(1, Math.round(1.5 * k)), () => gPair("passenger", "P>G", "G>P", G.ri(300, 900), G.ri(90, 180), true));
     // freight: the main line; Генічеськ gets one at most
-    tryN(Math.max(3, Math.round(7 * k)), () => { const j = journey(pd()[0], "freight", G.ri(10, 1300), () => 0); if (j) j.emit(); return !!j; });
+    // at Джанкой (a junction) every train stops: freight trains change crews, reserve locomotives — a short stop
+    const jStop = (a, b) => (h) => (h[0] === "dzhankoi" ? G.ri(a, b) : 0);
+    tryN(Math.max(3, Math.round(7 * k)), () => { const j = journey(pd()[0], "freight", G.ri(10, 1280), jStop(10, 25)); if (j) j.emit(); return !!j; });
     if (G.r() < 0.5) tryN(1, () => gPair("freight", "P>G", "G>P", G.ri(400, 900), G.ri(80, 140), true));
-    tryN(Math.max(1, Math.round(2 * k)), () => { const j = journey(pd()[0], "reserve", G.ri(10, 1300), () => 0); if (j) j.emit(); return !!j; });
+    tryN(Math.max(1, Math.round(2 * k)), () => { const j = journey(pd()[0], "reserve", G.ri(10, 1300), jStop(5, 8)); if (j) j.emit(); return !!j; });
     // each station's own shunting work; a big station (L.local) keeps also its own trains on the lines off the route
     L.stations.forEach((st) => {
       const evs = window.STATION_DATA[st].generate(seed, level, day).events;
