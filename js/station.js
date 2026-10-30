@@ -27,6 +27,9 @@
   if (m) id = m[1];
   if (!id) { try { id = localStorage.getItem("dsp-station"); } catch (e) { /* storage unavailable */ } }
   if (!reg[id]) id = "sokologirne";
+  // a station that belongs to a route is opened inside its route (line mode)
+  const ROUTE_OF = { sivash: "sh", salkove: "sh", novooleksiivka: "sh", henichesk: "sh" };
+  if (!window.LINE_ID && ROUTE_OF[id]) { window.LINE_ID = ROUTE_OF[id]; window.LINE_PLAYER = id; id = "sokologirne"; }
   const st = reg[id];
   window.STATION_ID = id;
   window.TOPOLOGY = st.TOPOLOGY;

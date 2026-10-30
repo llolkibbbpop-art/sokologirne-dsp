@@ -989,24 +989,49 @@
   // ---------- station: names, menu, station-specific help and sources ----------
   document.title = "АРМ ДСП " + T.station;
   $("brandName").textContent = "АРМ ДСП · " + T.station;
-  $("brandSub").textContent = (W ? "Ділянка " + W.L.name + " · " : "Навчальна модель МПЦ · ") + "план від " + T.planDate;
-  $("stName").textContent = T.station;
+  $("brandSub").textContent = (W ? "Маршрут " + W.L.name.replace(" — ", " → ") + " · " : "Навчальна модель МПЦ · ") + "план від " + T.planDate;
   document.querySelectorAll("[data-station]").forEach((n) => (n.hidden = n.dataset.station !== T.id));
   const SD = window.STATION_DATA || {}, LINES = (window.LineWorld && window.LineWorld.LINES) || {};
   const occupied = (id) => (W && W.others && W.others.get(id)) || null;
+  // stations that belong to a route appear only inside that route
+  const inLine = new Set([].concat(...Object.values(LINES).map((l) => l.stations)));
+  const singles = Object.values(SD).filter((st) => !inLine.has(st.id));
+  const lineBtns = Object.values(LINES).map((l) => `<button data-line="${esc(l.id)}" class="${W && W.L.id === l.id ? "on" : ""}"><b>Маршрут ${esc(l.name.replace(" — ", " → "))}</b><span>${l.stations.map((x) => esc(SD[x].name)).join(" · ")} — ${l.stations.length} станції разом</span></button>`).join("");
   $("stationList").innerHTML = (W
-    ? `<div class="st-cap">Ділянка ${esc(W.L.name)}: ви керуєте однією станцією, решту веде автодиспетчер</div>` + W.L.stations.map((id) => { const st = SD[id], who = occupied(id);
-      return `<button data-st="${esc(id)}" class="${id === T.id ? "on" : ""}"${who ? " disabled" : ""}><b>${esc(st.name)}</b><span>${who ? "керує " + esc(who) : id === T.id ? "ви тут" : "автодиспетчер"}</span></button>`; }).join("") + `<div class="st-cap">Окремі станції</div><button data-single="1"><b>← До вибору станцій</b><span>вийти з режиму ділянки</span></button>`
-    : Object.values(SD).map((st) => `<button data-st="${esc(st.id)}" class="${st.id === T.id ? "on" : ""}"><b>${esc(st.name)}</b><span>${esc(st.note || "")}</span></button>`).join("") +
-      `<div class="st-cap">Ділянки (кілька станцій разом)</div>` + Object.values(LINES).map((l) => `<button data-line="${esc(l.id)}"><b>${esc(l.name)}</b><span>${esc(l.note)}</span></button>`).join(""));
+    ? `<div class="st-cap">Зараз: маршрут ${esc(W.L.name.replace(" — ", " → "))}</div><p class="st-note">Між станціями маршруту перемикайтеся кнопкою «⇄» поруч. Станції без гравця веде автодиспетчер.</p>` +
+      `<button data-single="1"><b>← Вийти з маршруту</b><span>до окремих станцій</span></button><div class="st-cap">Окремі станції</div>`
+    : `<div class="st-cap">Окремі станції</div>`) +
+    singles.map((st) => `<button data-st="${esc(st.id)}" class="${!W && st.id === T.id ? "on" : ""}"><b>${esc(st.name)}</b><span>${esc(st.note || "")}</span></button>`).join("") +
+    `<div class="st-cap">Маршрути (кілька станцій разом)</div>` + lineBtns;
   $("stationList").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b || b.disabled) return;
-    if (b.dataset.line) { confirmCmd("ДЛ", LINES[b.dataset.line].name, "Перейти в режим ділянки " + LINES[b.dataset.line].name + " (поточна доба на станції " + T.station + " завершиться)", false, () => { window.selectLine(b.dataset.line); return { ok: true }; }); return; }
-    if (b.dataset.single) { window.selectStation(W.player); return; }
-    if (!b.dataset.st || b.dataset.st === T.id) return;
-    if (W) { $("stationPanel").hidden = true; window.switchStation(b.dataset.st); return; }
-    confirmCmd("СТ", SD[b.dataset.st].name, "Перейти на станцію " + SD[b.dataset.st].name + " (поточна доба на станції " + T.station + " завершиться)", false, () => { window.selectStation(b.dataset.st); return { ok: true }; });
+    if (b.dataset.line) { if (W && W.L.id === b.dataset.line) return; confirmCmd("МР", LINES[b.dataset.line].name, "Перейти на маршрут " + LINES[b.dataset.line].name.replace(" — ", " → ") + " (поточна доба на ст. " + T.station + " завершиться)", false, () => { window.selectLine(b.dataset.line); return { ok: true }; }); return; }
+    if (b.dataset.single) { confirmCmd("МР", "Вихід з маршруту", "Вийти з маршруту " + W.L.name + " до окремих станцій (поточна доба на маршруті завершиться)", false, () => { window.selectStation("sokologirne"); return { ok: true }; }); return; }
+    if (!b.dataset.st || (!W && b.dataset.st === T.id)) return;
+    confirmCmd("СТ", SD[b.dataset.st].name, "Перейти на станцію " + SD[b.dataset.st].name + " (поточна доба " + (W ? "на маршруті" : "на станції " + T.station) + " завершиться)", false, () => { window.selectStation(b.dataset.st); return { ok: true }; });
   });
+  // route mode only: the switch between the stations of the route
+  $("btnStation").title = W ? "Маршрут і вибір станцій" : "Вибір станції";
+  $("stName").textContent = W ? "Маршрут " + W.L.name.replace(" — ", " → ") : T.station;
+  if (W) {
+    $("lineStName").textContent = T.station + (RO ? " (спостереження)" : "");
+    const renderLineSt = () => {
+      const ro = (W.roster && W.roster()) || [];
+      const html = `<div class="st-cap">Станції маршруту ${esc(W.L.name.replace(" — ", " → "))}</div>` + W.L.stations.map((id, i) => {
+        const who = occupied(id), here = id === T.id, pl = ro.find((r) => r.st === id);
+        return `<button data-lst="${esc(id)}" class="${here ? "on" : ""}"><b>${i + 1}. ${esc(SD[id].name)}</b><span>${here ? (RO ? "ви спостерігаєте" : "ви тут") : who ? "керує " + esc(who) + " — можна лише спостерігати" : pl ? "" : "автодиспетчер — клацніть, щоб перейти"}</span></button>`;
+      }).join("");
+      if ($("lineStList").__h !== html) { $("lineStList").innerHTML = html; $("lineStList").__h = html; }
+    };
+    renderLineSt();
+    $("btnLineSt").addEventListener("click", renderLineSt);
+    $("lineStList").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-lst]"); if (!b) return;
+      const id = b.dataset.lst; if (id === T.id && !RO) return;
+      $("lineStPanel").hidden = true;
+      window.switchStation(id, occupied(id) ? { watch: true } : undefined);
+    });
+  }
   $("selSrc").closest("label").hidden = !ctx.SCHEDULE;
   if (T.id !== "sokologirne") { $("tabHist").hidden = true; }
   $("histList").innerHTML = window.HISTORY_NOTES.map((n) => `<div class="hist-item"><span class="pill ${lvl[n.level][0]}">${lvl[n.level][1]}</span><h3>${esc(n.title)}</h3><p>${esc(n.text)}</p>${n.links.map(([t, u]) => `<div><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a></div>`).join("")}</div>`).join("");
@@ -1048,7 +1073,7 @@
     $(btn).addEventListener("click", (e) => { e.stopPropagation(); const open = $(panel).hidden; document.querySelectorAll(".drop-panel").forEach((p) => (p.hidden = true)); $(panel).hidden = !open; $(btn).setAttribute("aria-expanded", String(open)); });
     $(panel).addEventListener("click", (e) => e.stopPropagation());
   }
-  dropToggle("btnTime", "timePanel"); dropToggle("btnSet", "settings"); dropToggle("btnStation", "stationPanel");
+  dropToggle("btnTime", "timePanel"); dropToggle("btnSet", "settings"); dropToggle("btnStation", "stationPanel"); dropToggle("btnLineSt", "lineStPanel");
   document.addEventListener("click", () => document.querySelectorAll(".drop-panel").forEach((p) => (p.hidden = true)));
   setRunning(ui.running);
   [...$("speedSeg").children].forEach((x) => x.classList.toggle("on", +x.dataset.s === ui.speed));

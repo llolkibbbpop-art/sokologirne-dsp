@@ -12,7 +12,7 @@
   const K = window.StationKit;
   const LINES = {
     sh: {
-      id: "sh", name: "Сиваш — Генічеськ", note: "ділянка: Сиваш — Салькове — Новоолексіївка — Генічеськ",
+      id: "sh", name: "Сиваш — Генічеськ", note: "маршрут: Сиваш → Салькове → Новоолексіївка → Генічеськ",
       stations: ["sivash", "salkove", "novooleksiivka", "henichesk"],
       // [station A, line key at A, station B, line key at B, running time (min), single-track]
       links: [["sivash", "S", "salkove", "V", 6, false], ["salkove", "N", "novooleksiivka", "S", 7, false], ["novooleksiivka", "G", "henichesk", "N", 10, true]],
