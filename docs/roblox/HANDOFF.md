@@ -43,6 +43,10 @@ Line mode = several neighbouring stations played together (each by one player or
 - Train radio (telegram forms per instruction ІРП ЦД-0058, chapter 9) and driver calls at closed signals.
 - Trains: dead-end station => all trains terminate and return; loco-hauled trains need a runaround.
 
+## 4a. Station plans
+Scans of the real station plans are in `docs/plans/` (README lists them). Names of signals, switches and tracks
+come from there; when code and plan differ, the plan is right. No plan of Sivash yet.
+
 ## 5. UI that was approved (keep behaviour)
 Square black/white АРМ scheme. Interaction windows are approved by the user and must keep their behaviour:
 object panel for signal/switch (list of routes: set / open-close / cancel), train card, confirmation dialogs,

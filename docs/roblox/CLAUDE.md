@@ -14,6 +14,9 @@ e.g. `../sokologirne-dsp`, and start Claude Code with `--add-dir ../sokologirne-
 - `js/i18n.js`  UI strings (Ukrainian + Polish)
 
 ## Rules
+- Station plans (scans) are in the reference repo `docs/plans/` (see its README). Before porting or changing a
+  station, open its plan: signal names, switch numbers and track layout must match the plan. The plan wins
+  over code and over general naming rules (e.g. Henichesk really has Н1М and НIIМ).
 - Start with ONE station (Henichesk, `js/henichesk.js`, small dead-end station). Others later.
 - Server-authoritative: the simulation runs on the server; clients only send commands
   and render state. Validate every remote argument on the server.
