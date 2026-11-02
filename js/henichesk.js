@@ -46,8 +46,8 @@
       { id: "М2", node: "M2n", dir: "L", kind: "shunt", note: "виїзд з колії 2а (вантажний парк Б) у парк" }
     ],
     park: [
-      { id: "1П", L: "L1", R: "R1", len: 831, sigL: "Ч1", sigR: "Н1М", kindR: "shunt", label: "Колія 1 (831 м, біля платформи)" },
-      { id: "IIП", L: "L2", R: "R2", len: 798, sigL: "ЧII", sigR: "НIIМ", kindR: "shunt", name: "II", label: "Колія II (798 м, головна, біля платформи)" },
+      { id: "1П", L: "L1", R: "R1", len: 831, sigL: "Ч1", sigR: "М6", kindR: "shunt", label: "Колія 1 (831 м, біля платформи)" },
+      { id: "IIП", L: "L2", R: "R2", len: 798, sigL: "ЧII", sigR: "М8", kindR: "shunt", name: "II", label: "Колія II (798 м, головна, біля платформи)" },
       { id: "3П", L: "L3", R: "R3", len: 393, sigL: "Ч3", label: "Колія 3 (393 м, тупик)" }
     ],
     lines: [
