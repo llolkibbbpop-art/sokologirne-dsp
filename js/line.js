@@ -12,16 +12,13 @@
   const K = window.StationKit;
   const LINES = {
     sh: {
-      id: "sh", name: "Джанкой — Генічеськ", note: "маршрут: Джанкой → Мамут → Солоне Озеро → Сиваш → Салькове → Новоолексіївка → Генічеськ; на Джанкої — до 2 гравців",
-      stations: ["dzhankoi", "mamut", "soloneozero", "sivash", "salkove", "novooleksiivka", "henichesk"],
+      id: "sh", name: "Мамут — Генічеськ", note: "маршрут: Мамут → Солоне Озеро → Сиваш → Салькове → Новоолексіївка → Генічеськ",
+      stations: ["mamut", "soloneozero", "sivash", "salkove", "novooleksiivka", "henichesk"],
       // [station A, line key at A, station B, line key at B, running time (min), single-track]
-      links: [["dzhankoi", "M", "mamut", "D", 7, false], ["mamut", "S", "soloneozero", "M", 6, false], ["soloneozero", "V", "sivash", "D", 6, false],
+      links: [["mamut", "S", "soloneozero", "M", 6, false], ["soloneozero", "V", "sivash", "D", 6, false],
         ["sivash", "S", "salkove", "V", 6, false], ["salkove", "N", "novooleksiivka", "S", 7, false], ["novooleksiivka", "G", "henichesk", "N", 10, true]],
-      outer: { "dzhankoi:S": "Сімферополь", "dzhankoi:B": "Вадим", "dzhankoi:F": "Владиславівка", "novooleksiivka:P": "Партизани (Мелітополь)" },
-      order: ["dzhankoi", "mamut", "soloneozero", "sivash", "salkove", "novooleksiivka", "henichesk"], ends: ["← Сімферополь · Вадим · Владиславівка", ""],
-      capacity: { dzhankoi: 2 },
-      // the big station keeps its own trains on the lines that leave the route, and all its shunting
-      local: { dzhankoi: "M", to: "P>J", from: "J>P" }
+      outer: { "mamut:D": "Джанкой", "novooleksiivka:P": "Партизани (Мелітополь)" },
+      order: ["mamut", "soloneozero", "sivash", "salkove", "novooleksiivka", "henichesk"], ends: ["← Джанкой", ""]
     },
     dn: {
       id: "dn", name: "Дніпро-Головний — Пост Амур", note: "маршрут: Дніпро-Головний → Пост Амур (Нижньодніпровськ); на Дніпрі-Головному — до 2 гравців",
@@ -76,19 +73,17 @@
 
   // ------------------------------------------------------------ the line timetable
   // a journey is a list of hops [station, line in, line out, stop min]; the time at a station is its arrival
-  const TOJ = [["soloneozero", "V", "M"], ["mamut", "S", "D"]];        // Сиваш → Джанкой
-  const FROMJ = [["mamut", "D", "S"], ["soloneozero", "M", "V"]];      // Джанкой → Сиваш
+  const TOJ = [["soloneozero", "V", "M"], ["mamut", "S", "D"]];        // Сиваш → Мамут → (Джанкой)
+  const FROMJ = [["mamut", "D", "S"], ["soloneozero", "M", "V"]];      // (Джанкой) → Мамут → Сиваш
   const PATH = {
-    "P>D": [["novooleksiivka", "P", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]].concat(TOJ, [["dzhankoi", "M", "S"]]),
-    "D>P": [["dzhankoi", "S", "M"]].concat(FROMJ, [["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "P"]]),
-    "P>J": [["novooleksiivka", "P", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]].concat(TOJ, [["dzhankoi", "M", null]]),
-    "J>P": [["dzhankoi", null, "M"]].concat(FROMJ, [["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "P"]]),
+    "P>D": [["novooleksiivka", "P", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]].concat(TOJ),
+    "D>P": FROMJ.concat([["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "P"]]),
     "P>G": [["novooleksiivka", "P", "G"], ["henichesk", "N", null]],
-    "D>G": [["dzhankoi", "S", "M"]].concat(FROMJ, [["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "G"], ["henichesk", "N", null]]),
+    "D>G": FROMJ.concat([["sivash", "D", "S"], ["salkove", "V", "N"], ["novooleksiivka", "S", "G"], ["henichesk", "N", null]]),
     "G>P": [["henichesk", null, "N"], ["novooleksiivka", "G", "P"]],
-    "G>D": [["henichesk", null, "N"], ["novooleksiivka", "G", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]].concat(TOJ, [["dzhankoi", "M", "S"]])
+    "G>D": [["henichesk", null, "N"], ["novooleksiivka", "G", "S"], ["salkove", "N", "V"], ["sivash", "S", "D"]].concat(TOJ)
   };
-  const PLACE = { P: "Мелітополь", D: "Сімферополь", J: "Джанкой", G: "Генічеськ" };
+  const PLACE = { P: "Мелітополь", D: "Джанкой", G: "Генічеськ" };
   function linkOf(L, st, key) {
     for (const l of L.links) {
       if (l[0] === st && l[1] === key) return { to: l[2], toKey: l[3], run: l[4], single: l[5], link: l };
@@ -158,7 +153,7 @@
           recTrack: rec || undefined, note: (stop ? "зупинка " + stop + " хв" : "без зупинки") + " · " + o.from + " → " + o.to }));
       });
     }
-    const odd = (d) => d.endsWith("D") || d.endsWith("G") || d.endsWith("J");
+    const odd = (d) => d.endsWith("D") || d.endsWith("G");
     const num = (type, dir) => G.num(type === "passenger" ? 1 : type === "electric" ? 6401 : type === "reserve" ? 4901 : 2001, type === "freight" ? 898 : type === "passenger" ? 140 : 98, odd(dir));
     function journey(dir, type, t, stopFn, extra) {
       const path = PATH[dir], stops = path.map((h, i) => stopFn(h, i));
@@ -190,16 +185,15 @@
       return false;
     }
     const pd = () => (G.r() < 0.5 ? ["P>D", "D>P"] : ["D>P", "P>D"]);
-    const stand = (h) => (h[0] === "dzhankoi" ? G.ri(10, 20) : h[0] === "novooleksiivka" && G.r() < 0.6 ? 2 : 0);
-    // електропоїзди: Мелітополь — Генічеськ is the main suburban flow (Мелітополь — Джанкой come from Джанкой's own timetable)
+    const stand = (h) => (h[0] === "novooleksiivka" && G.r() < 0.6 ? 2 : 0);
+    // електропоїзди: Мелітополь — Генічеськ is the main suburban flow 
     tryN(Math.max(5, Math.round(8 * k)), (i, n) => gPair("electric", "P>G", "G>P", 300 + (i + 0.5) * (1000 / n) + G.ri(-20, 20), G.ri(20, 40), false));
-    // passenger: through to Крим (a long stand at Джанкой); seasonal to Генічеськ with a long layover
+    // passenger: through to Крим ; seasonal to Генічеськ with a long layover
     tryN(Math.max(2, Math.round(4 * k)), () => { const d = pd()[0]; const j = journey(d, "passenger", G.ri(10, 1250), stand,
       { from: d[0] === "P" ? G.pick(["Київ", "Харків", "Запоріжжя-1"]) : G.pick(["Сімферополь", "Севастополь"]), to: d[0] === "P" ? G.pick(["Сімферополь", "Євпаторія"]) : G.pick(["Київ", "Дніпропетровськ"]) }); if (j) j.emit(); return !!j; });
     tryN(Math.max(1, Math.round(1.5 * k)), () => gPair("passenger", "P>G", "G>P", G.ri(300, 900), G.ri(90, 180), true));
     // freight: the main line; Генічеськ gets one at most
-    // at Джанкой (a junction) every train stops: freight trains change crews, reserve locomotives — a short stop
-    const jStop = (a, b) => (h) => (h[0] === "dzhankoi" ? G.ri(a, b) : 0);
+    const jStop = () => () => 0;
     tryN(Math.max(3, Math.round(7 * k)), () => { const j = journey(pd()[0], "freight", G.ri(10, 1280), jStop(10, 25)); if (j) j.emit(); return !!j; });
     if (G.r() < 0.5) tryN(1, () => gPair("freight", "P>G", "G>P", G.ri(400, 900), G.ri(80, 140), true));
     tryN(Math.max(1, Math.round(2 * k)), () => { const j = journey(pd()[0], "reserve", G.ri(10, 1300), jStop(5, 8)); if (j) j.emit(); return !!j; });

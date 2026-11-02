@@ -406,12 +406,13 @@
     function setMode(m) { S.mode = m; log("cmd", "Режим управління: " + ({ main: "ОСНОВНИЙ", reserve: "РЕЗЕРВНИЙ", aux: "ДОПОМІЖНИЙ" }[m])); return { ok: true }; }
     function toggleFault(k) { S.faults[k] = !S.faults[k]; log(S.faults[k] ? "warn" : "cmd", ({ fuse: "ПРЕДОХР.", slow: "ЗАМЕДЛ. ПУТ. ПОВТ.", kv: "РЕЗЕРВ. КВ." }[k]) + (S.faults[k] ? ": індикатор увімкнено (навчальна несправність)" : ": норма")); return { ok: true }; }
     function toggleSwitchLock(id) { const s = S.sw[id]; s.lockedInd = !s.lockedInd; log("cmd", "Положення стрілки " + id + (s.lockedInd ? " заблоковано (замок)" : " розблоковано")); return { ok: true }; }
-    function toggleSwitchBlock(id) { const s = S.sw[id]; s.blocked = !s.blocked; log("cmd", "Стрілку " + id + (s.blocked ? " заблоковано" : " розблоковано")); return { ok: true }; }
-    function toggleSectionBlock(id) { const s = S.sec[id]; s.blocked = !s.blocked; log("cmd", "Ділянку " + id + (s.blocked ? " заблоковано" : " розблоковано")); return { ok: true }; }
-    function toggleSignalBlock(id) {
+    const why = (r) => (r ? " (причина: " + String(r).slice(0, 200) + ")" : "");
+    function toggleSwitchBlock(id, reason) { const s = S.sw[id]; s.blocked = !s.blocked; log("cmd", "Стрілку " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true }; }
+    function toggleSectionBlock(id, reason) { const s = S.sec[id]; s.blocked = !s.blocked; log("cmd", "Ділянку " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true }; }
+    function toggleSignalBlock(id, reason) {
       const s = S.sig[id];
       if (!s.blocked && s.open) { const err = "спершу закрийте світлофор"; log("error", "Блокування " + id + ": " + err); return { ok: false, err }; }
-      s.blocked = !s.blocked; log("cmd", "Світлофор " + id + (s.blocked ? " заблоковано" : " розблоковано")); return { ok: true };
+      s.blocked = !s.blocked; log("cmd", "Світлофор " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true };
     }
     function artRelease(id) {
       const s = S.sec[id];
@@ -550,7 +551,7 @@
     function reservedByShunting() {
       const res = new Set();
       S.trains.forEach((t) => {
-        if (t.done || !t.shunt) return;
+        if (t.done || !t.shunt || isFree(t)) return;
         const plan = t.shunt.plan;
         for (let i = t.shunt.step; i < plan.length; i++) {
           const g = plan[i]; if (!g.sig || g.sig[0] === "@") continue;
@@ -642,7 +643,8 @@
       closeSignalsOf(rid);
       if (S.sig[sig].inv) S.sig[sig].inv = null;
       (tr.ridsUsed = tr.ridsUsed || []).push(rid); if (tr.ridsUsed.length > 6) tr.ridsUsed.shift();
-      if (tr.shunt) {
+      if (tr.shunt && isFree(tr)) tr.touched = true;
+      else if (tr.shunt) {
         // the plan moves on only when the DSP gave the route the task asks for
         const goal = stepGoal(tr), ends = endsOf(goal);
         if (!goal.sig || !ends.length || R.ends.some((e) => ends.includes(e)) || ends.includes(R.to)) tr.shunt.step++;
@@ -657,6 +659,132 @@
 
     // automatic dispatcher: everything (true), or only trains while the DSP does the shunting ("trains")
     const autoOn = (tr) => S.auto === true || (S.auto === "trains" && !tr.shunt);
+    // ---------------------------------------------------------------- free shunting
+    // A shunting job worked by the DSP is judged by its result, not by the order of routes in the plan:
+    // the locomotive runs over any shunting routes in any direction, the DSP couples and uncouples the wagons,
+    // and the job is done when the wagons stand where the plan puts them, a consist that is to depart has its
+    // locomotive at the departure end, and the locomotive itself is back where the plan ends.
+    const isFree = (tr) => !!tr.shunt && (!autoOn(tr) || !!tr.touched);
+    const secNodes = (sec) => { const ns = new Set(); ((D.sections[sec] || {}).edges || []).forEach((e) => { ns.add(e.a); ns.add(e.b); }); return ns; };
+    // the end of a track section the movement entered by: "L" or "R"
+    function entrySide(prev, sec) {
+      const a = secNodes(prev), b = secNodes(sec), shared = [...b].find((n) => a.has(n));
+      if (!shared) return null;
+      const xs = [...b].map((n) => T.nodes[n][0]), mid = (Math.min(...xs) + Math.max(...xs)) / 2;
+      return T.nodes[shared][0] <= mid ? "L" : "R";
+    }
+    // where a plan step ends: the track itself, or the section in front of the end signal
+    function stepPlaces(step) {
+      const out = new Set();
+      endsOf(step).forEach((e) => {
+        if (D.sections[e]) { out.add(e); return; }
+        Object.values(D.routes).forEach((r) => {
+          if (r.type !== "shunt" || !r.ends.includes(e)) return;
+          if (step.sig && step.sig[0] !== "@" && r.from !== step.sig) return;
+          out.add(r.sections[r.sections.length - 1]);
+        });
+      });
+      return [...out];
+    }
+    // the departure end of a consist: the side of the exit signal it will leave by
+    function departSide(consist, sec) {
+      const ev = S.events.find((e) => e.ev.action === "depart" && e.ev.consist === consist && e.status !== "passed");
+      if (!ev) return null;
+      let sig = (T.exitSignals[ev.parity] || {})[sec];
+      if (!sig) { const sg = Object.values(D.signals).find((x) => x.kind === "exit" && x.behind.includes(sec) && Object.values(D.routes).some((r) => r.from === x.id && r.type === "train" && r.to === ev.ev.exitTo)); sig = sg && sg.id; }
+      return sig ? D.signals[sig].dir : null;
+    }
+    const sideName = (d) => (d === "L" ? "з лівого боку" : "з правого боку");
+    // what the plan leads to (computed once, when the movement appears)
+    function deriveGoal(job, tr) {
+      const g = { places: [], attach: [], pickup: false, loco: null, visits: [] };
+      let cargo = tr.cargo ? "__carry" : null, here = [job.start], lastMove = null, prev = null;
+      const consistAt = (secs) => { for (const x of secs) { const w = S.sec[x] && S.sec[x].wagons; if (w) return w.consist || "__any"; } return null; };
+      for (const st of job.plan) {
+        const before = prev; prev = st;
+        if (st.sig) { here = stepPlaces(st); lastMove = st; continue; }
+        // a stay somewhere (servicing, loading): the locomotive has to get there
+        if (st.wait && lastMove && before && before.sig) { const tk = here.filter((x) => D.sections[x] && D.sections[x].kind === "track" && x !== job.start); if (tk.length && !g.visits.some((v) => v.join() === tk.join())) g.visits.push(tk); continue; }
+        if (st.couple) { cargo = consistAt(here) || (here.includes(job.start) && job.onWagons ? consistAt([job.start]) : null); if (cargo) { g.pickup = true; g.pickFrom = here.slice(); } continue; }
+        if (st.leave) { g.places.push({ from: cargo || "__carry", secs: here.filter((x) => D.sections[x] && D.sections[x].kind === "track"), id: st.consist || (cargo && cargo !== "__carry" && cargo !== "__any" ? cargo : null), ready: !!st.ready }); cargo = null; g.pickup = false; continue; }
+        if (st.attach) { const c = consistAt(here); if (c && c !== "__any") g.attach.push(c); g.absorb = true; }
+      }
+      if (cargo && cargo !== "__carry") g.pickup = true;
+      if (!g.absorb && !g.places.some((p) => p.ready) && lastMove) g.loco = stepPlaces(lastMove);
+      return g;
+    }
+    const cargoMatches = (c, from) => from === "__carry" ? !c.consist || c.tag === "carry" : from === "__any" || c.consist === from;
+    function goalState(tr) {
+      const g = tr.goal; if (!g) return { done: true, items: [] };
+      const items = [];
+      g.places.forEach((p) => {
+        const okW = (w) => w && (p.id ? w.consist === p.id : w.tag === tr.num) && (!p.ready || w.ready);
+        const sec = p.secs.length ? p.secs.find((x) => okW(S.sec[x].wagons)) : Object.keys(S.sec).find((x) => okW(S.sec[x].wagons));
+        items.push({ ok: !!sec, text: (p.id ? "состав " + p.id : "вагони") + (p.ready ? " готовий до відправлення (локомотив з боку відправлення)" : "") + " на " + (p.secs.length > 3 ? p.secs.slice(0, 3).join(", ") + " …" : p.secs.join(" / ")) });
+      });
+      g.attach.forEach((c) => { const sec = findConsist(c); items.push({ ok: !!(sec && S.sec[sec].wagons.ready), text: "локомотив причеплено до состава " + c + (sec && departSide(c, sec) ? " " + sideName(departSide(c, sec)) : "") }); });
+      (g.visits || []).forEach((v) => items.push({ ok: v.some((x) => (tr.visited || []).includes(x)), text: "локомотив побував на " + v.slice(0, 3).join(" / ") }));
+      if (g.pickup) items.push({ ok: !!tr.cargo, text: "вагони причеплено і привезено" });
+      if (g.loco && !tr.absorbed) items.push({ ok: g.loco.includes(headSec(tr)) && !(tr.cargo && !g.pickup), text: "локомотив" + (g.pickup ? " з вагонами" : "") + " повернувся на " + g.loco.slice(0, 4).join(" / ") });
+      return { done: items.every((i) => i.ok), items };
+    }
+    function couplePlace(tr) {
+      if (!tr || tr.done || !tr.shunt) return "немає маневрового складу";
+      if (tr.idx < tr.seq.length - 1) return "склад ще рухається";
+      const h = headSec(tr);
+      if (D.sections[h].kind !== "track") return "зчіплення і розчеплення — лише на коліях (склад на " + h + ")";
+      return null;
+    }
+    function shuntCouple(trId) {
+      const tr = S.trains.find((t) => t.id === trId), bad = couplePlace(tr);
+      if (bad) return { ok: false, err: bad };
+      const h = headSec(tr), w = S.sec[h].wagons;
+      if (!w) return { ok: false, err: "на колії " + h + " немає вагонів" };
+      tr.touched = true;
+      // a consist that waits for its train locomotive: only from the departure end
+      const g = tr.goal || {}, needLoco = (g.attach || []).includes(w.consist) || (g.places || []).some((p) => p.ready && p.id === w.consist);
+      if (needLoco && !w.ready) {
+        const ds = departSide(w.consist, h);
+        if (ds && tr.side && tr.side !== ds) { const err = "локомотив не з боку відправлення: состав " + w.consist + " відправляється " + (ds === "L" ? "ліворуч" : "праворуч") + ", під'їдьте " + sideName(ds); log("warn", "Маневровий " + tr.num + ": " + err); return { ok: false, err }; }
+        w.ready = true; tr.absorbed = true;
+        log("train", "Маневровий " + tr.num + ": локомотив причеплено з боку відправлення, состав " + w.consist + " на " + h + " готовий");
+        return { ok: true };
+      }
+      // more wagons to those already behind the locomotive: one cut
+      tr.cargo = tr.cargo ? Object.assign({}, tr.cargo, { len: (tr.cargo.len || 2) + (w.len || 2), consist: tr.cargo.consist || w.consist }) : w;
+      S.sec[h].wagons = null; tr.len = 2;
+      log("cmd", "Маневровий " + tr.num + ": " + (w.consist ? "состав " + w.consist : "вагони") + " причеплено на " + h);
+      return { ok: true };
+    }
+    function shuntUncouple(trId) {
+      const tr = S.trains.find((t) => t.id === trId), bad = couplePlace(tr);
+      if (bad) return { ok: false, err: bad };
+      const h = headSec(tr), c = tr.cargo;
+      if (!c) return { ok: false, err: "локомотив без вагонів" };
+      tr.touched = true;
+      const p = ((tr.goal || {}).places || []).find((x) => (!x.secs.length || x.secs.includes(h)) && cargoMatches(c, x.from));
+      let consist = c.consist || null, ready = false;
+      if (p) {
+        consist = p.id || consist;
+        if (p.ready) {
+          const ds = departSide(consist, h);
+          if (ds && tr.side && tr.side !== ds) log("warn", "Маневровий " + tr.num + ": состав " + consist + " не готовий — локомотив не з боку відправлення (" + (ds === "L" ? "ліворуч" : "праворуч") + ")");
+          else { ready = true; tr.absorbed = true; }
+        }
+      }
+      const old = S.sec[h].wagons;   // wagons already standing there: the cuts join
+      S.sec[h].wagons = { num: tr.num, since: S.time, consist: consist || (old && old.consist) || null, ready, len: (c.len || 2) + (old ? old.len || 2 : 0), kind: c.kind, tag: consist ? undefined : tr.num, locoSide: tr.side };
+      tr.cargo = null; tr.len = 1;
+      tr.occ.filter((x) => x !== h).forEach(releaseSection); tr.occ = [h]; S.sec[h].occ = tr.id;
+      log("cmd", "Маневровий " + tr.num + ": " + (ready ? "состав " + consist + " виставлено для відправлення на " : consist ? "состав " + consist + " поставлено на " : "вагони залишено на ") + h);
+      return { ok: true };
+    }
+    function finishShunt(tr, h) {
+      tr.occ.forEach(releaseSection); tr.occ = [];
+      tr.done = true; tr.doneAt = S.time; tr.marks.gone = S.time; tr.status = "маневри завершено";
+      finishEvent(tr);
+      log("train", "Маневровий склад " + tr.num + " завершив маневри на " + h + (isFree(tr) ? " — роботу зараховано за результатом" : ""), { evt: "gone", trId: tr.id });
+    }
     function stepTrain(tr) {
       if (tr.done) return;
       tr.tIn++;
@@ -679,10 +807,11 @@
       const atTrackEnd = atEnd && info.kind === "track";
       if (atTrackEnd && tr.stopSec && !tr.loco && !tr.shunt) need += tr.stopSec;
       // shunting plan: leave wagons here, or couple the wagons standing here
-      const cur = tr.shunt && atEnd && tr.shunt.plan[tr.shunt.step];
+      const free = isFree(tr);
+      const cur = tr.shunt && !free && atEnd && tr.shunt.plan[tr.shunt.step];
       if (cur && cur.leave) {
         const c = tr.cargo;
-        S.sec[h].wagons = { num: tr.num, since: S.time, consist: cur.consist || (c && c.consist) || null, ready: !!cur.ready, len: (c && c.len) || 2, kind: c && c.kind };
+        S.sec[h].wagons = { num: tr.num, since: S.time, consist: cur.consist || (c && c.consist) || null, ready: !!cur.ready, len: (c && c.len) || 2, kind: c && c.kind, locoSide: tr.side };
         tr.cargo = null; tr.len = 1;
         // the wagons stay; the locomotive alone now occupies only the section where it stands
         tr.occ.filter((x) => x !== h).forEach(releaseSection); tr.occ = [h]; S.sec[h].occ = tr.id;
@@ -704,13 +833,13 @@
         tr.shunt.step++; updateNextSignal(tr);
         return;
       }
-      const waitStep = tr.shunt && atEnd && (tr.shunt.plan[tr.shunt.step] || {}).wait;
+      const waitStep = tr.shunt && !free && atEnd && (tr.shunt.plan[tr.shunt.step] || {}).wait;
       if (waitStep) need += waitStep;
       if (tr.tIn < need) return;
       if (waitStep) { tr.shunt.step++; updateNextSignal(tr); }
       if (atEnd && tr.terminate && info.kind === "track") {
         // terminating train: the consist stays on the track (the locomotive still at its far end)
-        S.sec[h].wagons = { num: tr.num, since: S.time, consist: tr.terminate.consist, ready: !!tr.terminate.ready, len: tr.len, kind: tr.type };
+        S.sec[h].wagons = { num: tr.num, since: S.time, consist: tr.terminate.consist, ready: !!tr.terminate.ready, len: tr.len, kind: tr.type, locoSide: tr.side ? (tr.side === "L" ? "R" : "L") : null };
         tr.occ.forEach(releaseSection); tr.occ = [];
         tr.done = true; tr.doneAt = S.time; tr.marks.gone = S.time; tr.status = "прибув, состав на " + (info.group || h).replace("П", "");
         finishEvent(tr);
@@ -718,7 +847,8 @@
         return;
       }
       if (atEnd) {
-        if (kindOf(h, tr) === "exit" || (tr.shunt && tr.shunt.step >= tr.shunt.plan.length)) {
+        if (free && (tr.absorbed || goalState(tr).done)) { finishShunt(tr, h); return; }
+        if (kindOf(h, tr) === "exit" || (tr.shunt && !free && tr.shunt.step >= tr.shunt.plan.length)) {
           tr.occ.forEach(releaseSection); tr.occ = [];
           tr.done = true; tr.doneAt = S.time; tr.marks.gone = S.time; tr.status = tr.shunt ? "маневри завершено" : "проследував";
           finishEvent(tr);
@@ -728,15 +858,9 @@
         let sig = tr.nextSignal, rid = sig && routeFromSignal(sig, ["open"]), lead = null;
         if (tr.loco || tr.shunt) {
           rid = null;
-          // the automatic dispatcher keeps to the plan's signal; the DSP may choose its own way: any open
-          // shunting route from a signal facing the step's direction (the side the movement has to go)
-          const dir = tr.shunt && stepDir(tr);
-          const facing = signalsFacing(h).filter((sg) => !tr.shunt || (autoOn(tr) ? sg.id === tr.nextSignal : !dir || sg.dir === dir));
-          if (tr.shunt && !autoOn(tr) && dir) {
-            const wrong = signalsFacing(h).find((sg) => sg.dir !== dir && Object.keys(S.routes).some((k) => routeDef(k).from === sg.id && S.routes[k].state === "open" && S.routes[k].mode === "shunt"));
-            if (wrong) { const w = "маршрут від " + wrong.id + " — у протилежний бік, за завданням треба " + (dir === "L" ? "ліворуч" : "праворуч"); if (tr.wrongWay !== w) { tr.wrongWay = w; log("warn", "Маневровий " + tr.num + ": " + w); } tr.wait = w; tr.status = "стоїть: " + w; tr.waitSec++; return; }
-            tr.wrongWay = null;
-          }
+          // the automatic dispatcher keeps to the plan's signal; a movement worked by the DSP takes any open
+          // shunting route from a signal in front of it, in either direction
+          const facing = signalsFacing(h).filter((sg) => !tr.shunt || free || sg.id === tr.nextSignal);
           for (const sg of facing) {
             const r = Object.keys(S.routes).find((k) => routeDef(k).from === sg.id && S.routes[k].state === "open" && S.routes[k].mode === "shunt");
             if (r) {
@@ -767,7 +891,7 @@
         if (!rid) {
           // a shunting movement that has stopped pulls up fully onto the section where its head is
           if (tr.type === "shunting" && tr.occ.length > 1) { tr.occ.filter((x) => x !== h).forEach(releaseSection); tr.occ = [h]; }
-          const reason = sig ? (S.sig[sig].inv ? "запрошувальний горить, але стрілки не утворюють маршруту" : "чекає відкриття " + sig) : tr.loco ? "чекає маневрового маршруту" : "немає вихідного сигналу з " + h;
+          const reason = free ? "чекає маневрового маршруту" + (tr.cargo ? " (з вагонами)" : "") : sig ? (S.sig[sig].inv ? "запрошувальний горить, але стрілки не утворюють маршруту" : "чекає відкриття " + sig) : tr.loco ? "чекає маневрового маршруту" : "немає вихідного сигналу з " + h;
           if (tr.wait !== reason) { tr.wait = reason; tr.status = "стоїть: " + reason; }
           tr.waitSec++;
           return;
@@ -790,6 +914,7 @@
         tr.waitSec++; return;
       }
       tr.wait = null;
+      if (D.sections[next].kind === "track") { tr.side = entrySide(tr.seq[tr.idx], next) || tr.side; if (tr.shunt && tr.idx + 1 === tr.seq.length - 1) { tr.visited = tr.visited || []; if (!tr.visited.includes(next)) tr.visited.push(next); } }
       tr.idx++; tr.tIn = 0;
       if (!ontoStanding) { ns.occ = tr.id; tr.occ.push(next); }
       const ni = D.sections[next];
@@ -806,6 +931,7 @@
         }
       }
       if (tr.terminate && ni.kind === "track" && tr.idx === tr.seq.length - 1 && tr.arrivedAt == null) { tr.arrivedAt = S.time; tr.marks.stop = S.time; }
+      else if (!tr.shunt && tr.stopSec && ni.kind === "track" && tr.idx === tr.seq.length - 1 && tr.marks.stop == null) tr.marks.stop = S.time;
       tr.status = kindOf(next, tr) === "exit" ? "відправлено" : ni.kind === "track" ? "на колії " + (ni.group || next).replace("П", "") : "рух по " + next;
       updateNextSignal(tr);
     }
@@ -864,7 +990,9 @@
           const iLeave = job.plan.findIndex((x) => x.leave), iCouple = job.plan.findIndex((x) => x.couple);
           const carry = !job.onWagons && iLeave >= 0 && (iCouple < 0 || iLeave < iCouple);
           const tr = spawnTrain({ num: ev.ev.train, type: "shunting", parity: null, start: job.start, eventIdx: ev.idx, len: carry ? 2 : 1, shunt: { plan: job.plan, step: 0, job: ev.ev.job } });
-          if (carry) tr.cargo = { len: 2 };
+          if (carry) tr.cargo = { len: 2, tag: "carry" };
+          const w0 = S.sec[job.start].wagons; if (job.onWagons && w0 && w0.locoSide) tr.side = w0.locoSide;
+          tr.goal = deriveGoal(job, tr);
           ev.status = "active"; ev.trainId = tr.id; ev.marks = tr.marks; continue;
         }
         if (ev.ev.action === "depart") {
@@ -970,7 +1098,11 @@
       if (ev.ev.type === "shunting") return 0;
       if (ev.status === "passed") return ev.lateMin || 0;
       if (ev.status === "config") return 0;
-      const late = Math.floor((S.time - ev.time - (ev.ev.stopMin || 0) * 60) / 60);
+      // a train that has already left (passed its exit signal) or arrived is judged by that moment, not by the
+      // time it still spends on the line blocks behind the station
+      const tr = ev.status === "active" && ev.trainId != null ? S.trains.find((t) => t.id === ev.trainId) : null;
+      const at = tr && (tr.terminate ? tr.arrivedAt : tr.passedAt);
+      const late = Math.floor(((at != null ? at : S.time) - ev.time - (ev.ev.stopMin || 0) * 60) / 60);
       return late > 0 ? late : 0;
     }
     function nextEvent() {
@@ -1009,7 +1141,7 @@
     return {
       setSchedule, D, get S() { return S; }, reset, step, run, setRoute, openSignal, closeSignal, cancelRoute, moveSwitch,
       toggleSwitchLock, toggleSwitchBlock, toggleSectionBlock, toggleSignalBlock, artRelease, inviteSignal, setFault,
-      spawnLoco, removeLoco, setMode, toggleFault, setDelay, addTestTrain, checkRoute, routesFrom, routeDef,
+      spawnLoco, removeLoco, shuntCouple, shuntUncouple, goalState, isFree, setMode, toggleFault, setDelay, addTestTrain, checkRoute, routesFrom, routeDef,
       nextEvent, isIdle, lateMin, blocksFor, fmt, on: (f) => { listeners.push(f); return () => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }; }, routeFromSignal, buildEvents: () => (S.events = buildEvents()), kindOf, findConsist,
       log: (k, t) => log(k, t), KIT_NAME, snapshot, ingest
     };

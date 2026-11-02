@@ -45,8 +45,21 @@
   const endBtn = (e) => (T.endButtons || []).find((b) => b.id === e);
   const endName = (e) => (D.signals[e] ? "світлофор " + e : endBtn(e) ? "кнопка " + endBtn(e).label : D.sections[e] ? (D.sections[e].group ? trackName(D.sections[e].group) : e) : trackName(e));
   // geometry of a signal symbol (shared by drawing, pick highlighting and the route line)
+  // the signal is drawn beside the track; where the track turns towards that side at the signal (a diagonal
+  // starting there) the signal goes to the other side so it never sits on the line
+  const nbrs = {}; T.edges.forEach(([a, b]) => { (nbrs[a] = nbrs[a] || []).push(b); (nbrs[b] = nbrs[b] || []).push(a); });
+  const sideCache = {};
+  function sigSide(s) {
+    if (sideCache[s.id] != null) return sideCache[s.id];
+    let side = s.side || (s.dir === "R" ? 1 : -1);
+    if (s.sideFixed) return (sideCache[s.id] = side);
+    const p0 = T.nodes[s.node], dys = (nbrs[s.node] || []).map((n) => T.nodes[n][1] - p0[1]).filter((d) => Math.abs(d) > 0.5);
+    const hits = (sd) => dys.some((d) => Math.sign(d) === sd);
+    if (hits(side) && !hits(-side)) side = -side;
+    return (sideCache[s.id] = side);
+  }
   function sigGeom(s) {
-    const [x0, y] = pt(s.node), x = x0 + (s.dx || 0), dir = s.dir === "R" ? 1 : -1, yy = y + s.side * 15;
+    const [x0, y] = pt(s.node), x = x0 + (s.dx || 0), dir = s.dir === "R" ? 1 : -1, yy = y + sigSide(s) * 15;
     return { x, y, yy, dir, lx: x + dir * 12 };
   }
 
@@ -88,13 +101,22 @@
     return "M" + P.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" L");
   }
 
+  // a pixel-art padlock (blocked switch / signal), u — size of one pixel; x, y — top left corner
+  function padlock(parent, x, y, u) {
+    const g = el("g", { class: "padlock", transform: `translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${u})` }, parent);
+    [["pl-sh", 3, 0, 6, 2], ["pl-sh", 2, 1, 2, 5], ["pl-sh", 8, 1, 2, 5], ["pl-b0", 0, 6, 12, 8], ["pl-b1", 1, 6, 10, 6], ["pl-b2", 1, 12, 10, 1],
+      ["pl-k", 5, 8, 3, 3], ["pl-b1", 7, 10, 1, 1]].forEach(([c, a, b, w, h]) => el("rect", { x: a, y: b, width: w, height: h, class: c }, g));
+    return g;
+  }
   function buildSvg() {
     svg.innerHTML = "";
     const nodeSecs = {};
     T.edges.forEach(([a, b, sec]) => [a, b].forEach((n) => (nodeSecs[n] = nodeSecs[n] || new Set()).add(sec)));
-    const isJoint = (n) => nodeSecs[n].size > 1 && !/^S/.test(n);
+    const swNodes = new Set(T.switches.map((x) => x.node));
+    const isJoint = (n) => nodeSecs[n].size > 1 && !swNodes.has(n);
     svg.setAttribute("viewBox", BOX[0] + " " + VY0 + " " + BOX[2] + " " + Math.round(VH * (ui.vs || 1)));
-    (V.platforms || []).forEach(([x, y, w, h]) => el("rect", { x, y: sy(y + h / 2) - h / 2, width: w, height: h, class: "platform" }, svg));
+    // [x, y, width, height, angle]: a platform along an inclined track is turned about its centre
+    (V.platforms || []).forEach(([x, y, w, h, a]) => { const cy = sy(y + h / 2); el("rect", Object.assign({ x, y: cy - h / 2, width: w, height: h, class: "platform" }, a ? { transform: `rotate(${a} ${x + w / 2} ${cy})` } : {}), svg); });
     const note = (x, y, t, cls) => (el("text", { x, y: sy(y), class: cls || "note" }, svg).textContent = t);
     (V.notes || []).forEach(([x, y, t]) => note(x, y, t));
     (V.borders || []).forEach(([x1, y1, x2, y2]) => el("line", { x1, y1: sy(y1), x2, y2: sy(y2), class: "border" }, svg));
@@ -128,13 +150,33 @@
       const pts = [];
       for (let q = 0; q < nodes.length - 1; q++) { const P = edgePts(nodes[q], nodes[q + 1]); (q ? P.slice(1) : P).forEach((x) => pts.push(x.slice())); }
       const cut = (p0, p1, c) => { const L = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1; p0[0] += (p1[0] - p0[0]) / L * c; p0[1] += (p1[1] - p0[1]) / L * c; };
-      if (isJoint(nodes[0])) cut(pts[0], pts[1], 3);
-      if (isJoint(nodes[nodes.length - 1])) cut(pts[pts.length - 1], pts[pts.length - 2], 3);
-      const d = "M" + pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" L");
+      // how each end meets the track beyond it: a straight insulating joint shows a small gap; at a corner
+      // (a joint on a bend, a switch's diverging leg) the line is carried a little past the node so the
+      // double line stays closed — no gaps and no notches
+      const turnAt = (n, inner) => {
+        const P = pt(n), dx = P[0] - inner[0], dy = P[1] - inner[1], L0 = Math.hypot(dx, dy) || 1;
+        const sw = T.switches.find((x) => x.node === n), from = n === nodes[0] ? nodes[1] : nodes[nodes.length - 2];
+        let others = (nbrs[n] || []).filter((m) => m !== from);
+        if (sw) others = from === sw.common ? [sw.plus, sw.minus] : [sw.common];
+        let best = Math.PI;
+        others.forEach((m) => { const Q = edgePts(n, m)[1], ex = Q[0] - P[0], ey = Q[1] - P[1], L1 = Math.hypot(ex, ey) || 1; best = Math.min(best, Math.acos(Math.max(-1, Math.min(1, (dx * ex + dy * ey) / (L0 * L1))))); });
+        return others.length ? best : null;
+      };
+      const extend = (p0, p1, c) => cut(p0, p1, -c);
+      const ptsO = pts.map((p) => p.slice()), ptsI = pts.map((p) => p.slice());
+      [[0, 1], [pts.length - 1, pts.length - 2]].forEach(([k, kk]) => {
+        const n = k === 0 ? nodes[0] : nodes[nodes.length - 1], th = turnAt(n, pts[kk]);
+        if (th == null) return;
+        if (th < 0.09) { if (isJoint(n)) { cut(ptsO[k], ptsO[kk], 3); cut(ptsI[k], ptsI[kk], 3); } return; }
+        const t = Math.tan(Math.min(th, 1.4) / 2);
+        extend(ptsO[k], ptsO[kk], 5 * t + 0.4); extend(ptsI[k], ptsI[kk], 2.5 * t);
+      });
+      const dOf = (A) => "M" + A.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" L");
+      const d = dOf(pts), dO = dOf(ptsO), dI = dOf(ptsI);
       const leg = swLegEdge[nodes[0] + "|" + nodes[1]];
       const sloped = pts.some((p, k, A) => k && p[1] !== A[k - 1][1]);
-      const o = el("path", { d, class: "tube-o" }, sloped ? gSO : gO);
-      const i = el("path", { d, class: "tube-i" }, sloped ? gSI : gI);
+      const o = el("path", { d: dO, class: "tube-o" }, sloped ? gSO : gO);
+      const i = el("path", { d: dI, class: "tube-i" }, sloped ? gSI : gI);
       const hit = el("path", { d, class: "hit" }, gHit);
       el("title", {}, hit).textContent = (D.sections[sec].label || "Стрілочна секція") + " · " + sec;
       hit.addEventListener("click", (ev) => onObjectClick({ kind: "sec", id: sec }, ev));
@@ -164,12 +206,11 @@
       const tx = sloped ? x + away * 14 : x;
       el("rect", { x: tx - 13, y: below ? y + 7 : y - 26, width: 26, height: 20, class: "sw-hit" }, g);
       // blocked: red underlay under the number (handbook p.190); position locked: padlock beside it
-      const bl = el("rect", { x: tx - 9, y: ty - 11, width: 18, height: 14, rx: 2, class: "sw-block" }, g);
       const t = el("text", { x: tx, y: ty, "text-anchor": "middle", class: "sw-label" }, g); t.textContent = s.id;
-      const lk = T.lockFrame ? el("rect", { x: tx - 11, y: ty - 13, width: 22, height: 18, class: "sw-lockf" }, g)
-        : s.lockOut ? el("text", { x: tx, y: ty + (below ? 17 : -17), "text-anchor": "middle", class: "sw-lock" }, g)
-        : el("text", { x: tx + away * (s.id.length > 1 ? 15 : 13), y: ty, "text-anchor": away > 0 ? "start" : "end", class: "sw-lock" }, g);
-      if (!T.lockFrame) lk.textContent = "🔒";
+      // position locked: a dashed frame around the number; blocked: a padlock beside it
+      const lk = el("rect", { x: tx - (s.id.length > 2 ? 15 : 11), y: ty - 13, width: s.id.length > 2 ? 30 : 22, height: 18, class: "sw-lockf" }, g);
+      const half = (s.id.length > 2 ? 15 : s.id.length > 1 ? 11 : 8) + 2;
+      const bl = padlock(g, away > 0 ? tx + half : tx - half - 13.2, ty - 14, 1.1);
       el("title", {}, g).textContent = "Стрілка " + s.id;
       g.addEventListener("click", (ev) => onObjectClick({ kind: "sw", id: s.id }, ev));
       swEls[s.id] = { t, lk, bl, g };
@@ -205,7 +246,7 @@
       const inv = el("circle", { cx: lx, cy: yy, r: lr + 2.5, class: "inv" }, g);
       const lamp = el("circle", { cx: lx, cy: yy, r: lr, class: "lamp" }, g);
       const tw = 8 * s.id.length + 4;
-      const blk = el("rect", { x: dir > 0 ? x - 4 - tw : x + 2, y: yy - 7, width: tw, height: 14, rx: 2, class: "sw-block" }, g);
+      const blk = padlock(g, dir > 0 ? x - 6 - tw - 13 : x + tw + 6, yy - 8, 1.1);
       const t = el("text", { x: dir > 0 ? x - 4 : x + 4, y: yy + 4, "text-anchor": dir > 0 ? "end" : "start" }, g); t.textContent = s.id;
       el("title", {}, g).textContent = "Світлофор " + s.id + (s.note ? " — " + s.note : "");
       g.addEventListener("click", (ev) => onObjectClick({ kind: "sig", id: s.id }, ev));
@@ -500,6 +541,10 @@
       locodel: ["ЛК", "Локомотив", "Прибрати маневровий локомотив", false, () => sim.removeLoco(+a)]
     };
     const [mn, obj, desc, resp, fn] = map[c];
+    // blocking asks for a reason (it goes to the log); unblocking is an ordinary command
+    const blockFns = { swblock: [S.sw[a], "стрілки " + a, (why) => sim.toggleSwitchBlock(a, why)], sigblock: [S.sig[a], "світлофора " + a, (why) => sim.toggleSignalBlock(a, why)],
+      secblock: [S.sec[a], "ділянки " + a, (why) => sim.toggleSectionBlock(a, why)] };
+    if (blockFns[c] && blockFns[c][0] && !blockFns[c][0].blocked) { askBlockReason(blockFns[c][1], blockFns[c][2]); return; }
     confirmCmd(mn, obj, desc, resp, fn);
   });
 
@@ -518,6 +563,19 @@
     (resp && !ui.autoCode ? $("mCode") : $("mOk")).focus();
   }
   function closeModal() { $("modal").hidden = true; pending = null; }
+  let blkFn = null;
+  function askBlockReason(what, fn) {
+    blkFn = fn; $("blkText").textContent = "Вкажіть причину блокування " + what; $("blkReason").value = "";
+    $("blkDlg").hidden = false; $("blkReason").focus();
+  }
+  const closeBlk = () => { $("blkDlg").hidden = true; blkFn = null; };
+  $("blkCancel").onclick = () => { closeBlk(); refresh(); };
+  $("blkOk").onclick = () => {
+    if (!blkFn) return;
+    const r = blkFn($("blkReason").value.trim()); closeBlk();
+    toast(r && r.ok ? "Заблоковано." : "Відмова: " + (r && r.err), r && r.ok ? "ok" : "err");
+    refresh();
+  };
   $("mX").onclick = () => $("mCancel").click();
   $("mCancel").onclick = () => { if (pending) { sim.log("cmd", "Команду відмінено ДСП"); if (pending.onCancel) pending.onCancel(); } closeModal(); refresh(); };
   $("mOk").onclick = () => {
@@ -528,7 +586,8 @@
     refresh();
   };
   document.addEventListener("keydown", (e) => {
-    if (!$("modal").hidden) { if (e.key === "Escape") $("mCancel").click(); if (e.key === "Enter") $("mOk").click(); }
+    if (!$("blkDlg").hidden) { if (e.key === "Escape") $("blkCancel").click(); }
+    else if (!$("modal").hidden) { if (e.key === "Escape") $("mCancel").click(); if (e.key === "Enter") $("mOk").click(); }
     else if (!$("help").hidden && e.key === "Escape") $("help").hidden = true;
     else if (ui.pick && e.key === "Escape") stopPick("Набір маршруту відмінено.");
   });
@@ -627,7 +686,7 @@
       const date = dateStr(S.day);
       tb.innerHTML = S.events.map((ev, i) => {
         const [f, t] = ends(ev);
-        return `<tr class="ev" data-i="${i}"><td><b>${esc(ev.ev.train)}</b></td><td>${date}</td><td class="tm">${esc(ev.ev.time)}</td><td>${typeShort[ev.ev.type] || ""}</td><td>${esc(f)}</td><td>${esc(t)}</td></tr>`;
+        return `<tr class="ev" data-i="${i}"><td><b>${esc(ev.ev.train)}</b></td><td>${date}</td><td class="tm">${esc(ev.ev.time)}</td><td>${typeShort[ev.ev.type] || ""}</td><td class="stp">${ev.ev.stopMin ? ev.ev.stopMin + " хв" : "—"}</td><td>${esc(f)}</td><td>${esc(t)}</td></tr>`;
       }).join("");
     }
     S.events.forEach((ev, i) => {
@@ -653,6 +712,13 @@
     } else { pop.style.left = pop.style.top = ""; }
   }
   $("infoClose").onclick = () => { $("infoPop").classList.remove("open"); ui.selEvent = null; ui.selTrain = null; renderEvents(); };
+  [$("nextBox"), $("trainBox")].forEach((box) => box.addEventListener("click", (e) => {
+    const bt = e.target.closest("button[data-shc]"); if (!bt) return;
+    if (RO) { toast("Режим спостереження.", "err"); return; }
+    const id = +bt.dataset.tr, r = bt.dataset.shc === "couple" ? sim.shuntCouple(id) : sim.shuntUncouple(id);
+    if (r && r.ok === false) toast("Відмова: " + r.err, "err"); else if (r && r.ok) toast(bt.dataset.shc === "couple" ? "Причеплено." : "Відчеплено.", "ok");
+    refresh();
+  }));
   $("evTable").addEventListener("click", (e) => { const r = e.target.closest("tr.ev"); if (!r) return; openInfo(+r.dataset.i, e.clientX, e.clientY); });
   $("trainBox").addEventListener("change", (e) => { const i = e.target.dataset.d; if (i == null) return; sim.setDelay(+i, Math.max(0, +e.target.value || 0)); refresh(); });
 
@@ -664,7 +730,7 @@
     const dir = st.sig && (st.sig[0] === "@" ? st.sig[1] : (D.signals[st.sig] || {}).dir);
     const sig = st.sig && st.sig[0] === "@" && sigNow ? "<b>" + esc(sigNow) + "</b>" : st.sig && st.sig[0] === "@" ? "світлофор " + (st.sig[1] === "L" ? "у бік лівої горловини" : "у бік правої горловини") + ", що стоїть перед локомотивом" : "<b>" + esc(st.sig) + "</b>";
     const end = [].concat(st.end).map(esc).join(" або ");
-    return "<b>" + (dir === "L" ? "← ліворуч" : "праворуч →") + "</b> до <b>" + end + "</b> маневровими маршрутами (шлях обираєте ви; найпростіше: " + sig + " → кінець " + end + ")" + (st.txt ? " — " + esc(st.txt) : "");
+    return "<b>" + (dir === "L" ? "←" : "→") + "</b> " + sig + " → кінець <b>" + end + "</b>" + (st.txt ? " (" + esc(st.txt) + ")" : "");
   }
   function adviceHtml(ev) {
     const job = ev.ev.job && (ev.plan || P.shuntingJobs[ev.ev.job]);
@@ -672,6 +738,18 @@
       const note = ev.ev.note ? `<div class="adv-note">${esc(ev.ev.note)}</div>` : "";
       if (!job.plan) return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name)}. План складається, коли состав стоятиме на колії.${note}</div>`;
       const tr = ev.trainId != null ? sim.S.trains.find((t) => t.id === ev.trainId && !t.done) : null;
+      // worked by the DSP: the result to reach, the couple / uncouple buttons, and the plan only as a hint
+      const freeMode = tr && tr.shunt && sim.isFree(tr);
+      if (freeMode || (!tr && ev.status !== "passed" && sim.S.auto !== true)) {
+        const gs = tr ? sim.goalState(tr) : null, h = tr ? tr.seq[tr.idx] : null;
+        const goals = gs ? gs.items.map((i) => `<li class="${i.ok ? "g-ok" : "g-no"}">${i.ok ? "✓" : "○"} ${esc(i.text)}</li>`).join("") : "";
+        const btns = tr ? `<div class="sh-btns"><button data-shc="couple" data-tr="${tr.id}" ${tr.cargo ? "disabled" : ""}>⛓ Причепити</button><button data-shc="uncouple" data-tr="${tr.id}" ${tr.cargo ? "" : "disabled"}>✂ Відчепити</button>
+          <span class="hint">локомотив${tr.cargo ? " з вагонами" : ""} на ${esc(h)}${tr.side ? " (" + (tr.side === "L" ? "лівий" : "правий") + " кінець)" : ""}</span></div>` : "";
+        const hint = job.plan.filter((st) => st.sig || st.leave || st.couple || st.attach).map((st) => stepHtml(st)).join("; ");
+        return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name || P.shuntingJobs[ev.ev.job].name)}. Локомотив ${tr ? "на " + esc(h) : "з'явиться на <b>" + esc(job.start) + "</b>"}.
+          ${goals ? `<div><b>Що має бути в результаті</b> (шлях і порядок обираєте ви: будь-які маневрові маршрути в будь-який бік; причеплення до состава під відправлення — лише з боку відправлення):<ul class="goals">${goals}</ul></div>` : "<div>Шлях і порядок маневрів обираєте ви; робота зараховується за результатом.</div>"}${btns}
+          <details><summary>Приклад, як можна виконати</summary>${hint}</details>${note}</div>`;
+      }
       const cur = tr && tr.shunt ? tr.shunt.step : -1;
       const steps = job.plan.map((st, i) => (i === cur ? "<u>зараз: " + stepHtml(st, tr.nextSignal) + "</u>" : i < cur ? "<s>" + stepHtml(st) + "</s>" : stepHtml(st))).join("; потім ");
       return `<div class="advice"><b>Маневрова робота:</b> ${esc(job.name || P.shuntingJobs[ev.ev.job].name)}. Локомотив з'явиться на ділянці <b>${esc(job.start)}</b>. Порядок: ${steps}.${note}</div>`;
@@ -771,6 +849,25 @@
   const G = { span: window.innerWidth < 600 ? 2 : 4, follow: true, start: 0, last: 0 };
   [...$("gSpan").children].forEach((x) => x.classList.toggle("on", +x.dataset.h === G.span));
   const GCOL = { passenger: "#ff5a4e", intercity: "#ff8a3d", electric: "#2fe05a", suburban: "#2fe05a", freight: "#e8eef0", test: "#9a9a9a", shunting: "#ffd23f", household: "#ff9fcf", reserve: "#bdbdbd" };
+  // the neighbours of the station for the chart: one row per adjacent line, those on the left above the station,
+  // those on the right below it; a train is drawn from the line it really comes by to the line it really leaves by
+  const GRAPH = (function () {
+    const RC = T.radio || {}, sides = RC.sides || {}, cx = BOX[0] + BOX[2] / 2;
+    const nodeX = (n) => (T.nodes[n] ? T.nodes[n][0] : cx);
+    const xs = {};
+    Object.entries(RC.bySignal || {}).forEach(([sg, k]) => { const s0 = T.signals.find((x) => x.id === sg); if (s0) (xs[k] = xs[k] || []).push(nodeX(s0.node)); });
+    Object.entries(RC.byLine || {}).forEach(([sec, k]) => { const e = T.edges.find((x) => x[2] === sec); if (e) (xs[k] = xs[k] || []).push((nodeX(e[0]) + nodeX(e[1])) / 2); });
+    // stations without per-line data: odd trains come from "back" (drawn above) and go "fwd" (below)
+    if (!Object.keys(xs).length) { const o = RC.odd || {}; if (o.back) xs[o.back] = [cx - 1]; if (o.fwd) xs[o.fwd] = [cx + 1]; }
+    const keys = Object.keys(sides).filter((k) => xs[k]);
+    const avg = (k) => xs[k].reduce((a, b) => a + b, 0) / xs[k].length;
+    const ys = (k) => { const s0 = T.signals.find((x) => x.kind === "entry" && RC.bySignal && RC.bySignal[x.id] === k); return s0 && T.nodes[s0.node] ? T.nodes[s0.node][1] : 0; };
+    const left = keys.filter((k) => avg(k) < cx).sort((a, b) => ys(a) - ys(b)), right = keys.filter((k) => avg(k) >= cx).sort((a, b) => ys(a) - ys(b));
+    if (!keys.length) return null;
+    const inOf = (ev) => (RC.bySignal ? RC.bySignal[ev.ev.entry || (T.entrySignal || {})[ev.parity]] : (RC[ev.parity] || {}).back) || null;
+    const outOf = (ev) => (RC.byLine ? RC.byLine[ev.ev.exitTo] : (RC[ev.parity] || {}).fwd) || null;
+    return { left, right, name: (k) => sides[k].name, inOf, outOf };
+  })();
   function drawGraph(force) {
     const S = sim.S, cv = $("graph");
     const nowKey = Math.floor(S.time / 5) + ":" + S.day + ":" + G.span + ":" + G.start + ":" + G.follow;
@@ -780,60 +877,71 @@
     if (!W) return;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const css = getComputedStyle(document.body), T_ = !!T.terminal;
+    const css = getComputedStyle(document.body);
     const col = (v) => css.getPropertyValue(v).trim();
     c.fillStyle = col("--panel"); c.fillRect(0, 0, W, H);
-    const L = W < 500 ? 66 : 96, R = 10, top = 26, bot = H - 24;
-    const yTop = top, yBot = bot, yA = top + (bot - top) * (T.terminal ? 0.62 : 0.38), yB = T.terminal ? bot : top + (bot - top) * 0.62;
+    const L = W < 500 ? 66 : 110, R = 10, top = 22, bot = H - 24;
+    // rows: the lines on the left (above), the station band, the lines on the right (below)
+    const GL = GRAPH ? GRAPH.left : [], GR = GRAPH ? GRAPH.right : [];
+    const u = (bot - top) / (Math.max(1, GL.length) + Math.max(1, GR.length) + 1.4);
+    const yA = top + Math.max(1, GL.length) * u, yB = yA + 1.4 * u, yMid = (yA + yB) / 2;
+    const rowY = {};
+    GL.forEach((k, i) => (rowY[k] = yA - (GL.length - i) * u));
+    GR.forEach((k, i) => (rowY[k] = yB + (i + 1) * u));
     const span = G.span * 3600;
     if (G.follow) G.start = Math.max(0, Math.min(86400 - span, S.time - span * 0.3));
     const t0 = G.start, t1 = t0 + span;
     const X = (t) => L + ((t - t0) / span) * (W - L - R);
-    // rows
     c.fillStyle = "rgba(127,127,127,.12)"; c.fillRect(L, yA, W - L - R, yB - yA);
     c.strokeStyle = col("--line"); c.lineWidth = 1;
-    (T.terminal ? [yTop, yA, yB] : [yTop, yA, yB, yBot]).forEach((y) => { c.beginPath(); c.moveTo(L, y); c.lineTo(W - R, y); c.stroke(); });
-    c.fillStyle = col("--fg"); c.font = "600 " + (W < 500 ? 10 : 11) + "px " + col("--font-mono"); c.textBaseline = "middle";
-    const names = (V.graph || ["", T.station, ""]).map((n) => (W < 500 && n.length > 9 ? n.slice(0, 7) + "." : n));
-    c.fillText(names[0], 4, yTop); c.fillText(names[1], 4, (yA + yB) / 2); if (names[2]) c.fillText(names[2], 4, yBot);
+    [yA, yB].concat(Object.values(rowY)).forEach((y) => { c.beginPath(); c.moveTo(L, y); c.lineTo(W - R, y); c.stroke(); });
+    c.fillStyle = col("--fg"); c.textBaseline = "middle";
+    const fs = u >= 18 ? 16 : 12;
+    c.font = fs + "px " + col("--font-mono");
+    const short = (n) => { const max = W < 500 ? 9 : 14; return n.length > max ? n.slice(0, max - 1) + "." : n; };
+    const tr = (n) => (window.I18N ? I18N.t(n) : n);
+    Object.entries(rowY).forEach(([k, y]) => c.fillText(short(tr(GRAPH.name(k))), 4, y));
+    c.fillText(short(tr(T.station)), 4, yMid);
     // time grid
     const step = [900, 1800, 3600, 7200, 10800].find((st) => (st / span) * (W - L - R) >= 56) || 10800;
-    c.textBaseline = "alphabetic"; c.font = "10px " + col("--font-mono"); c.fillStyle = col("--muted");
+    c.textBaseline = "alphabetic"; c.font = "16px " + col("--font-mono"); c.fillStyle = col("--muted");
     for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) {
       const x = X(t); c.strokeStyle = "rgba(127,127,127,.18)"; c.beginPath(); c.moveTo(x, top - 6); c.lineTo(x, bot); c.stroke();
       c.fillText(E.fmt(t).slice(0, 5), x - 14, H - 6);
     }
     const lead = (ev) => ((ev.ev.action === "depart" ? -(P.departLeadMin || 6) : P.appearLeadMin[ev.ev.type] || 3) * 60);
-    // everything inside the plot is clipped to the time window; train numbers never overlap
     c.save(); c.beginPath(); c.rect(L, 0, W - L - R, H); c.clip();
-    const used = { top: [], bot: [], mid: [] };
+    const used = {};
     const label = (row, x, y, text, color) => {
-      c.font = "600 10px " + col("--font-mono");
-      const w = c.measureText(text).width;
-      if (used[row].some(([a, b]) => x < b + 4 && a < x + w + 4)) return;
-      used[row].push([x, x + w]); c.fillStyle = color; c.fillText(text, x, y);
+      c.font = "16px " + col("--font-mono");
+      const w = c.measureText(text).width, U = (used[row] = used[row] || []);
+      if (U.some(([a, b]) => x < b + 4 && a < x + w + 4)) return;
+      U.push([x, x + w]); c.fillStyle = color; c.fillText(text, x, y);
     };
+    const edgeOf = (k) => (k && GR.includes(k) ? yB : yA);
     S.events.forEach((ev) => {
       if (ev.status === "config") return;
       const color = GCOL[ev.ev.type] || "#ccc";
-      const T = ev.time + (ev.delayMin || 0) * 60, stop = (ev.ev.stopMin || 0) * 60;
-      const odd = ev.parity === "odd";
-      const yIn = odd ? yTop : yBot, yEdgeIn = odd ? yA : yB, yEdgeOut = odd ? yB : yA, yOut = odd ? yBot : yTop;
-      let planPts, sh = ev.ev.type === "shunting";
-      if (sh) {
+      const T0 = ev.time + (ev.delayMin || 0) * 60, stop = (ev.ev.stopMin || 0) * 60;
+      if (ev.ev.type === "shunting") {
         const job = ev.plan || P.shuntingJobs[ev.ev.job] || P.shuntingPlan;
-        const dur = job.plan ? job.plan.reduce((a, st) => a + (st.wait || 180), 0) : job.estSec || 1200;
-        if (T + dur < t0 || T > t1) return;
-        c.fillStyle = "rgba(255,210,63,.18)"; c.fillRect(X(T), yA + 3, Math.max(2, X(T + dur) - X(T)), yB - yA - 6);
+        const dur = job && job.plan ? job.plan.reduce((a, st) => a + (st.wait || 180), 0) : (job && job.estSec) || 1200;
+        if (T0 + dur < t0 || T0 > t1) return;
+        c.fillStyle = "rgba(255,210,63,.18)"; c.fillRect(X(T0), yA + 3, Math.max(2, X(T0 + dur) - X(T0)), yB - yA - 6);
         const m = ev.marks;
-        if (m && m.appear != null) { c.fillStyle = color; c.fillRect(X(m.appear), (yA + yB) / 2 - 3, Math.max(2, X(m.gone != null ? m.gone : S.time) - X(m.appear)), 6); }
-        label("mid", Math.max(L + 2, X(T) + 2), yA + 12, ev.ev.train, color);
+        if (m && m.appear != null) { c.fillStyle = color; c.fillRect(X(m.appear), yMid - 3, Math.max(2, X(m.gone != null ? m.gone : S.time) - X(m.appear)), 6); }
+        label("mid", Math.max(L + 2, X(T0) + 2), yA + 12, ev.ev.train, color);
         return;
       }
-      const yMid = (yA + yB) / 2;
-      if (T_ && ev.ev.action === "arrive") planPts = [[T - lead(ev), yTop], [T - 30, yA], [T + 90, yMid]];
-      else if (T_ && ev.ev.action === "depart") planPts = [[T - 300, yMid], [T, yA], [T + 240, yTop]];
-      else planPts = [[T - lead(ev), yIn], [T - 30, yEdgeIn], [T + stop, yEdgeOut], [T + stop + 240, yOut]];
+      const arrive = ev.ev.action === "arrive", depart = ev.ev.action === "depart";
+      const kin = depart ? null : GRAPH && GRAPH.inOf(ev), kout = arrive ? null : GRAPH && GRAPH.outOf(ev);
+      const yIn = kin ? rowY[kin] : null, yOut = kout ? rowY[kout] : null, eIn = edgeOf(kin), eOut = edgeOf(kout);
+      let planPts;
+      // a stop is drawn as a horizontal stretch in the middle of the station band
+      if (arrive) planPts = [[T0 - lead(ev), yIn != null ? yIn : eIn], [T0 - 30, eIn], [T0 + 60, yMid]];
+      else if (depart) planPts = [[T0 - 300, yMid], [T0 - 30, yMid], [T0 + 30, eOut], [T0 + 240, yOut != null ? yOut : eOut]];
+      else if (stop) planPts = [[T0 - lead(ev), yIn != null ? yIn : eIn], [T0 - 60, eIn], [T0, yMid], [T0 + stop, yMid], [T0 + stop + 60, eOut], [T0 + stop + 240, yOut != null ? yOut : eOut]];
+      else planPts = [[T0 - lead(ev), yIn != null ? yIn : eIn], [T0 - 30, eIn], [T0 + 30, eOut], [T0 + 240, yOut != null ? yOut : eOut]];
       if (planPts[planPts.length - 1][0] < t0 || planPts[0][0] > t1) return;
       c.strokeStyle = color; c.globalAlpha = 0.55; c.setLineDash([5, 4]); c.lineWidth = 1.2;
       c.beginPath(); planPts.forEach(([t, y], k) => (k ? c.lineTo(X(t), y) : c.moveTo(X(t), y))); c.stroke();
@@ -842,18 +950,21 @@
       const m = ev.marks;
       if (m && m.appear != null) {
         const tr = S.trains.find((x) => x.id === ev.trainId);
-        const pts = T_ ? [[m.appear, ev.ev.action === "depart" ? yMid : yTop]] : [[m.appear, yIn]];
-        if (T_ && ev.ev.action === "arrive") { if (m.arrive != null) pts.push([m.arrive, yA]); if (m.gone != null) pts.push([m.gone, yMid]); }
-        else if (T_) { if (m.depart != null) pts.push([m.depart, yA]); if (m.gone != null) pts.push([m.gone, yTop]); }
+        const pts = [[m.appear, depart ? yMid : yIn != null ? yIn : eIn]];
+        const stood = m.stop != null || stop > 0;
+        if (m.arrive != null && !depart) pts.push([m.arrive, eIn]);
+        if (m.stop != null && !depart) pts.push([m.stop, yMid]);
+        if (arrive) { if (m.gone != null) pts.push([m.gone, yMid]); }
         else {
-          if (m.arrive != null) pts.push([m.arrive, yEdgeIn]);
-          if (m.depart != null) pts.push([m.depart, yEdgeOut]);
-          if (m.gone != null) pts.push([m.gone, yOut]);
+          if (m.depart != null) { if (stood || depart) pts.push([Math.max(m.depart - 30, (pts[pts.length - 1] || [0])[0]), yMid]); pts.push([m.depart, eOut]); }
+          if (m.gone != null) pts.push([m.gone, yOut != null ? yOut : eOut]);
         }
         if (m.gone == null && tr && !tr.done) {
-          const k = D.sections[tr.seq[tr.idx]].kind;
-          const y = T_ ? (ev.ev.action === "depart" ? (m.depart != null ? (yA + yTop) / 2 : yMid) : m.arrive != null ? (yA + yMid) / 2 : yTop + (yA - yTop) * (tr.wait ? 0.95 : 0.5))
-            : m.depart != null ? yEdgeOut + (yOut - yEdgeOut) * 0.5 : m.arrive != null ? (k === "track" ? (yEdgeIn + yEdgeOut) / 2 : yEdgeIn + (yEdgeOut - yEdgeIn) * 0.25) : yIn + (yEdgeIn - yIn) * (tr.wait ? 0.95 : 0.5);
+          let y;
+          if (m.depart != null) y = eOut + ((yOut != null ? yOut : eOut) - eOut) * 0.5;
+          else if (depart || m.stop != null) y = yMid;
+          else if (m.arrive != null) y = (eIn + yMid) / 2;
+          else y = (yIn != null ? yIn : eIn) + (eIn - (yIn != null ? yIn : eIn)) * (tr.wait ? 0.95 : 0.5);
           pts.push([S.time, y]);
         }
         c.strokeStyle = color; c.lineWidth = 2;
@@ -861,8 +972,8 @@
       }
       const lx = Math.max(L + 2, X(planPts[0][0]) + 2);
       const late = sim.lateMin(ev);
-      const row = T_ ? "top" : odd ? "top" : "bot";
-      label(row, lx, row === "top" ? yTop - 5 : yBot + 13, ev.ev.train + (late > 0 ? " +" + late : ""), late > 0 ? "#ff5a4e" : color);
+      const ly = planPts[0][1], above = ly <= yA;
+      label("r" + Math.round(ly), lx, above ? ly - 4 : ly + 12, ev.ev.train + (late > 0 ? " +" + late : ""), late > 0 ? "#ff5a4e" : color);
     });
     // now
     if (S.time >= t0 && S.time <= t1) { c.strokeStyle = "#ff2b2b"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(S.time), top - 10); c.lineTo(X(S.time), bot); c.stroke(); }

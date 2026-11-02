@@ -6,8 +6,6 @@
 <meta name="theme-color" content="#000000">
 <title>АРМ ДСП Сокологірне</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&family=Oswald:wght@500;600&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -25,6 +23,7 @@
     </div>
     <div class="drop"><button id="btnSet" aria-expanded="false">⚙ Налаштування</button>
       <div class="drop-panel" id="settings" hidden>
+        <label title="Мова інтерфейсу / Język interfejsu" data-noi18n>Мова / Język <select id="selLang"><option value="uk">Українська</option><option value="pl">Polski</option></select></label>
         <label title="Хто задає маршрути: ви, система або система для поїздів, а ви — маневри">Автодиспетчер <select id="selAuto"><option value="off">вимкнено — усе задаєте ви</option><option value="trains">лише поїзди — ви робите маневри</option><option value="all">усе задає система</option></select></label>
         <label title="Код пильності вписується в поле автоматично"><input type="checkbox" id="chkCode" checked> Підказувати код</label>
         <label title="Звук, коли поїзд вступає на ділянку наближення, і дзвінок на кожне повідомлення по радіо (сусідня станція, машиніст)"><input type="checkbox" id="chkSound" checked> Звукові сигнали</label>
@@ -114,7 +113,7 @@
       </div>
       <div class="card sheet-card">
         <h2>Розклад на добу <span class="hint" id="evDay"></span></h2>
-        <div class="tbl-wrap sheet"><table id="evTable"><thead><tr><th>№ поїзда</th><th>Дата</th><th>Час</th><th>Тип</th><th>Від станції</th><th>До станції</th></tr></thead><tbody></tbody></table></div>
+        <div class="tbl-wrap sheet"><table id="evTable"><thead><tr><th>№ поїзда</th><th>Дата</th><th>Час</th><th>Тип</th><th title="Стоянка на станції за графіком">Стоянка</th><th>Від станції</th><th>До станції</th></tr></thead><tbody></tbody></table></div>
         <p class="hint sheet-hint">Клацніть рядок, щоб побачити відомості про поїзд.</p>
       </div>
     </div>
@@ -131,7 +130,7 @@
 </section>
 
 <section id="viewHist" hidden>
-  <div class="card"><h2>Історичні відомості (окремо від моделі)</h2><div class="hist-list" id="histList"></div></div>
+  <div class="card"><h2>Історичні відомості (окремо від моделі)</h2><div class="hist-list" id="histList" data-noi18n></div></div>
 </section>
 
 <footer>Станції описано в <code>js/topology.js</code> + <code>js/schedule.js</code> (Сокологірне) <code>js/berdyansk.js</code> (Бердянськ) і <code>js/zaporizhzhia2.js</code> (Запоріжжя II). Назви блоків, поділ колій на блоки, довжини поїздів і графік — модельні.</footer>
@@ -154,6 +153,7 @@
 <div id="help" class="modal-bg" hidden>
   <div class="modal help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <h3 id="helpTitle">Як працювати на АРМ ДСП</h3>
+    <div class="help-uk" data-noi18n>
     <p class="hint">Порядок дій узято з посібника «Автоматизовані станційні системи керування рухом поїздів», с. 136–165.</p>
     <h4>Встановлення маршруту (початок → кінець)</h4>
     <ol>
@@ -291,28 +291,12 @@
       <li>Парні — вліво по II: <b>Ч</b> → II або 3; відправлення <b>ЧII, Ч3</b> → кінець <b>ВС</b>. Тупик 4 (28 м) і П/К (не діє, <b>М2</b>).</li>
     </ul>
     </div>
-    <div data-station="dzhankoi" hidden>
-    <h4>Джанкой: велика вузлова станція з гіркою</h4>
-    <p>Найбільша станція маршруту (план 01.02.2013). На Джанкої в маршруті можуть працювати двоє гравців одночасно.</p>
-    <ul>
-      <li>Зліва — Мамут (двоколійна: прибуття <b>Нм</b>, відправлення — кінець <b>ВМ</b>) і Вадим/Богемка (одноколійна, <b>НБ</b>, кінець <b>ВБ</b>). Справа — Сімферополь (прибуття <b>Чс</b>, відправлення — кінець <b>ВС</b>) і Владиславівка/Феодосія (одноколійна, <b>ЧВ</b>, кінець <b>ВВ</b>). Непарні йдуть вправо, парні — вліво.</li>
-      <li><b>Приміський парк</b> (17А, 18А, IIА, IIIА, VА — тупики): електропоїзди з Мамута і Вадима закінчують тут рейс і йдуть назад (<b>Ч17А … Ч5А</b>). Угорі — ЕЧК-39 (<b>М11</b>).</li>
-      <li><b>Південний парк</b>: IVЮ, IIIЮ, VIЮ (біля платформ), 6Ю … 12Ю, IЮ; вихідні вліво <b>Ч..Ю</b>, вправо <b>Н..Ю</b>. Верхні IVЮ … VIЮ доступні з верхнього ходу (через <b>М12</b>/<b>М17</b>), нижні — з нижнього (<b>М4</b>/<b>М25</b>).</li>
-      <li>Колії 6Ю … 9Ю справа виходять на головний хід (вихідні <b>Н6Ю … Н9Ю</b>), а <b>10Ю … IЮ — приймальні перед гіркою</b>: справа в них маневрові <b>М10Ю … М1Ю</b>, і через стрілки 93 … 97 вони сходяться на насув до гірки (<b>М72</b>, <b>МГ1</b>, ГАЦ). За гіркою — <b>сортувально-відправний парк</b> 11 … 18, 21, 22: зліва — маневрові <b>ПЧ11 … ПЧ22</b>, справа — вихідні <b>Н11 … Н22</b> на Сімферополь і Владиславівку (стрілка 150). Далі — колії для локомотивів 1Т, 2Т (<b>М35</b>, <b>М37</b>) і пара <b>М33</b>/<b>М31</b>.</li>
-      <li>Під Південним парком — локомотивне депо (ЛД1, ЛД2, <b>М80</b>, <b>М82</b>) і вагонне депо (1в, 2в, <b>М84</b>, <b>М86</b>), до них — хід з <b>М74</b>/<b>М76</b>.</li>
-      <li>Станція довга: схему прокручуйте вліво-вправо смугою прокрутки, перетягуванням мишею або Shift+коліщатко; «МАСШТАБ» +/− змінює масштаб, ▭ — вся станція в ширину вікна.</li>
-      <li>Маневрів дуже багато: вантажні з Мамута і Вадима приходять на приймальні 10Ю … IЮ; состав праворуч через <b>М10Ю … М1Ю</b> подають на насув до <b>МГ1</b> і з гірки — на вільну колію сортувального парку, локомотив повертається за <b>М72</b>. Потім або локомотив з 1Т/2Т (<b>М33</b>) стає в голову состава і поїзд іде на Сімферополь / Владиславівку, або состав через гірку (<b>М72</b>) повертають на приймальну колію, а локомотив з депо (<b>М2</b> → <b>М4</b>) стає в голову для відправлення на Мамут / Вадим. Поїзди з Сімферополя на Мамут змінюють локомотив (<b>М2</b> → <b>М4</b> → депо і назад). Подачі у вагонне депо, з ЕЧК-39 у Приміський парк, перестановка місцевих вагонів 22 ↔ 21 через гірку.</li>
-      <li>На Джанкої зупиняються всі поїзди: пасажирські 10–20 хв, вантажні 10–25 хв (зміна бригад), резервні локомотиви 5–8 хв, електропоїзди — щонайменше кілька хвилин.</li>
-      <li>Горловини і парки на плані значно складніші; групи стрілок зведено до «драбин», номери стрілок частково умовні.</li>
-    </ul>
-    </div>
-    <h4>Маршрут Джанкой → Генічеськ (кілька станцій разом)</h4>
-    <p>Джанкой, Мамут, Солоне Озеро, Сиваш, Салькове, Новоолексіївка і Генічеськ окремо в меню станцій не показуються — вони об'єднані в маршрут. У меню станцій розділ «Маршрути» — <b>Джанкой → Генічеськ</b>: усі сім станцій працюють одночасно на одному годиннику. Ви керуєте однією станцією, інші веде автодиспетчер. Поїзд, що відправився від вас, не зникає: коли він звільнить перегін, через час ходу з'явиться на підході сусідньої станції з тим самим номером. Якщо ви не відправите поїзд, сусід його і не отримає.</p>
+    <h4>Маршрут Мамут → Генічеськ (кілька станцій разом)</h4>
+    <p>Мамут, Солоне Озеро, Сиваш, Салькове, Новоолексіївка і Генічеськ окремо в меню станцій не показуються — вони об'єднані в маршрут. У меню станцій розділ «Маршрути» — <b>Мамут → Генічеськ</b>: усі шість станцій працюють одночасно на одному годиннику. Ви керуєте однією станцією, інші веде автодиспетчер. Поїзд, що відправився від вас, не зникає: коли він звільнить перегін, через час ходу з'явиться на підході сусідньої станції з тим самим номером. Якщо ви не відправите поїзд, сусід його і не отримає.</p>
     <ul>
       <li>Смуга над схемою показує всі станції ділянки, хто ними керує і які поїзди зараз на перегонах (→ / ←). Лише в цьому режимі з'являється кнопка <b>«⇄ станція»</b> поруч з меню: у ній — усі станції маршруту. Клацніть станцію там або в смузі — ви перейдете туди, а вашу попередню станцію підхопить автодиспетчер.</li>
       <li>Перегін Новоолексіївка — Генічеськ одноколійний: маршрут відправлення на нього не задасться, поки там поїзд з будь-якого боку.</li>
       <li>Між Новоолексіївкою і Генічеськом ходять переважно електропоїзди (Мелітополь — Генічеськ), вантажних у Генічеськ мало.</li>
-      <li>Пасажирські і вантажні Мелітополь ↔ Сімферополь проходять усю ділянку через Джанкой; електропоїзди Мелітополь — Джанкой закінчують рейс у Приміському парку Джанкоя. На Джанкої, крім поїздів маршруту, — власні поїзди з Вадима, Владиславівки і Сімферополя та вся його маневрова робота.</li>
     </ul>
     <h4>Маршрут Дніпро-Головний → Пост Амур</h4>
     <p>Два пости на одному годиннику: велика станція Дніпро-Головний і Пост Амур. Поїзд, відправлений з Дніпра-Головного на Пост Амур, з'являється на підході до Пост Амура, і навпаки. Перемикання між постами — кнопкою «⇄» (лише в режимі маршруту). У грі по мережі на Дніпрі-Головному можуть працювати <b>двоє гравців одночасно</b> (обидва задають маршрути на одній станції й бачать курсори одне одного), на Пост Амурі — один; всього троє.</p>
@@ -329,17 +313,17 @@
     <h4>Стоянки поїздів</h4>
     <p>Поїзд із зупинкою стоїть щонайменше 5 модельних хвилин — і тоді, коли запізнюється.</p>
     <h4>Гра по мережі</h4>
-    <p>У режимі ділянки з'являється кнопка <b>«Мережа»</b>. Один гравець натискає «Створити кімнату» і передає іншим код; інші вводять код і «Приєднатися» (або відкривають посилання з <code>#line=sh&amp;join=КОД</code>). Кожен отримує вільну станцію; гравців не більше, ніж місць на станціях (Джанкой → Генічеськ — 8, бо на Джанкої двоє; Дніпро-Головний → Пост Амур — 3, бо на Дніпрі-Головному двоє). Станції без гравця веде автодиспетчер, а коли гравець переходить на іншу станцію, попередню підхоплює автодиспетчер (якщо там нікого немає).</p>
+    <p>У режимі ділянки з'являється кнопка <b>«Мережа»</b>. Один гравець натискає «Створити кімнату» і передає іншим код; інші вводять код і «Приєднатися» (або відкривають посилання з <code>#line=sh&amp;join=КОД</code>). Кожен отримує вільну станцію; гравців не більше, ніж місць на станціях (Мамут → Генічеськ — 6; Дніпро-Головний → Пост Амур — 3, бо на Дніпрі-Головному двоє). Станції без гравця веде автодиспетчер, а коли гравець переходить на іншу станцію, попередню підхоплює автодиспетчер (якщо там нікого немає).</p>
     <ul>
       <li>Модель рахує ведучий (хто створив кімнату): у нього годинник, швидкість і графік. Інші гравці бачать його стан і надсилають свої команди.</li>
       <li>У кожного гравця свій колір і форма курсора. На зайняту іншим гравцем станцію можна зайти лише для спостереження — тоді видно і його курсор.</li>
       <li>Зв'язок — напряму між браузерами (WebRTC) через безкоштовний сервер PeerJS. Якщо мережа його блокує, спробуйте іншу мережу. Кнопка «У вкладках» — гра між вкладками одного браузера для перевірки.</li>
     </ul>
     <h4>Станції</h4>
-    <p>Кнопка зі значком будівлі зліва вгорі — вибір станції: Сокологірне, Бердянськ, Запоріжжя II, а також маршрути Джанкой → Генічеськ і Дніпро-Головний → Пост Амур. Шрифти, кольори і команди однакові; змінюється план, графік і маневрова робота.</p>
+    <p>Кнопка зі значком будівлі зліва вгорі — вибір станції: Сокологірне, Бердянськ, Запоріжжя II, а також маршрути Мамут → Генічеськ і Дніпро-Головний → Пост Амур. Шрифти, кольори і команди однакові; змінюється план, графік і маневрова робота.</p>
     <h4>Вигляд</h4>
     <p>Фон (чорний або сірий) перемикається в «⚙ Налаштування».</p>
-    <p>Великі станції (Джанкой, Дніпро-Головний) ширші за екран: схему можна прокручувати вліво-вправо — смугою прокрутки, перетягуванням мишею або Shift+коліщатко; «МАСШТАБ» +/− змінює масштаб, ▭ вписує станцію в ширину вікна.</p>
+    <p>Великі станції (Дніпро-Головний) ширші за екран: схему можна прокручувати вліво-вправо — смугою прокрутки, перетягуванням мишею або Shift+коліщатко; «МАСШТАБ» +/− змінює масштаб, ▭ вписує станцію в ширину вікна.</p>
     <p>«▣ Лише пульт» згортає все, крім пульта, і розтягує план станції приблизно на 70 % висоти екрана. «⏱ Час» — пуск/пауза, швидкість ×0.1–×4 (при ×1 модельна доба триває 1 годину реального часу), прокрутка до події, скидання доби. У грі по мережі часом керує лише ведучий (хто створив кімнату). Відомості про поїзд — клацнути рядок у розкладі або поїзд на схемі.</p>
     <h4>Легенда</h4>
     <div class="legend">
@@ -364,6 +348,200 @@
       <li><b>Штучне розмикання</b> ділянки, що лишилась замкненою: 3 хв, блимає ІР.</li>
       <li>Лічильники рахують запрошувальні (ЗС), допоміжні переведення (ДП) і штучні розмикання (ШР).</li>
     </ul>
+    </div>
+    <div class="help-pl" data-noi18n>
+    <p class="hint">Kolejność czynności wzięto z podręcznika „Zautomatyzowane stacyjne systemy sterowania ruchem pociągów”, s. 136–165. Nazwy semaforów, torów i odcinków (Н1, Ч4, М12 …) pozostają takie jak na planie stacji.</p>
+    <h4>Ustawianie przebiegu (początek → koniec)</h4>
+    <ol>
+      <li>Kliknij semafor, od którego zaczyna się przebieg. W panelu wybierz „Ustaw przebieg pociągowy” lub „Ustaw przebieg manewrowy”.</li>
+      <li>Od semafora do kursora ciągnie się linia (zielona — pociągowy, żółta — manewrowy). Możliwe końce są obwiedzione turkusowo. Kliknij semafor końcowy, przycisk <b>ВЯ</b> albo sam tor.</li>
+      <li>Zwrotnice się przestawiają (~4 s, numer miga), odcinki obwodzą się kolorem przebiegu, potem zamykają się (jasnoszare wypełnienie) i semafor się otwiera. W przebiegu manewrowym tarcze po drodze otwierają się same.</li>
+      <li>Esc lub „Odwołanie nastawiania” — anuluje wybór końca.</li>
+    </ol>
+    <div data-station="sokologirne">
+    <h4>Przyjęcie i wyprawienie</h4>
+    <ul>
+      <li>Przyjęcie nieparzystego (z Jakymiwki): <b>Н</b> → pociągowy → koniec — semafor przeciwny na początku toru: tor I — <b>М11</b>, 3 — <b>Ч3</b>, 4 — <b>Ч4</b>, 6 — <b>Ч6</b> (albo kliknij sam tor).</li>
+      <li>Przyjęcie parzystego (z Partyzan): <b>Ч</b> → pociągowy → tor II — <b>М18</b>, 4 — <b>Н4</b>, 6 — <b>Н6</b>, 3 — <b>Н3</b>.</li>
+      <li>Wyprawienie do Partyzan: <b>Н1, Н3, Н4, Н6</b> → pociągowy → koniec <b>ЧД</b>. Do Jakymiwki: <b>Ч2, Ч3, Ч4, Ч6</b> → pociągowy → koniec <b>ВЯ</b>.</li>
+      <li>Pociąg nigdy nie przejeżdża sygnału „stój”. Dopóki semafor jest zamknięty, pociąg stoi, a opóźnienie rośnie i jest pokazywane na czerwono.</li>
+    </ul>
+    <h4>Które pociągi dokąd (zasady modelu)</h4>
+    <ul>
+      <li>Intercity i pasażerskie bez postoju — tory główne I (nieparzyste) i II (parzyste).</li>
+      <li>EZT z postojem — tory przy peronach: I, II, nieparzyste także 3.</li>
+      <li>Towarowy do wyprzedzenia — na boczny 3, 4 lub 6, dopóki szybszy nie przejedzie po głównym.</li>
+      <li>Po zwrotnicy w kierunku zwrotnym pociąg jedzie nie szybciej niż 50 km/h.</li>
+    </ul>
+    </div>
+    <div data-station="berdyansk" hidden>
+    <h4>Berdiańsk: stacja czołowa</h4>
+    <p>Wszystkie pociągi przyjeżdżają z Berdy (Połohy) po jednotorowym szlaku i tak samo wracają. Dopóki na szlaku jest pociąg lub ustawiono na niego przebieg odjazdowy, pociąg przeciwny się nie pojawi — szlak jest jeden.</p>
+    <ul>
+      <li>Przyjęcie: <b>Н</b> → „Ustaw przebieg pociągowy” → koniec — tarcza manewrowa na prawym końcu toru: 1 — <b>М30</b>, 2 — <b>М28</b>, III — <b>М24</b>, 4 — <b>М22</b>, 5 — <b>М16</b>, 6 — <b>М14</b>, 7 — <b>М26</b>. Pasażerskie i podmiejskie — tylko na 1 i 2 (przy peronach).</li>
+      <li>Wyprawienie: <b>Ч1–Ч7</b> → „Ustaw przebieg pociągowy” → koniec <b>ВБ</b>. Pociąg ruszy nie wcześniej niż według rozkładu.</li>
+      <li>Spalinowy zespół podmiejski ma kabiny z obu stron — po przyjeździe od razu gotowy do kursu powrotnego. Pociągi z lokomotywą wymagają <b>objazdu lokomotywy</b>.</li>
+    </ul>
+    <h4>Objazd lokomotywy</h4>
+    <ol>
+      <li>Lokomotywa odczepia się i wyjeżdża w prawo za tarczę swojego toru (М28, М30, М24…) na wolny tor 13 (albo kozioł 25, 18а).</li>
+      <li>Stamtąd — za <b>М6</b> (z toru 13) lub <b>М4</b> (z toru 25) innym wolnym torem grupy do jego lewego końca.</li>
+      <li>Dalej przez lewą głowicę za <b>М3</b> na odcinek НІП (przebieg do <b>Н</b>), potem <b>М3</b> → z powrotem na swój tor do składu.</li>
+    </ol>
+    <h4>Praca towarowa i port</h4>
+    <p>Pociąg towarowy przyjeżdża na 4–7 lub III. Manewry „Podstawienie do portu”: lokomotywa ciągnie wagony przez prawą głowicę, tor 18 lub 18а i zwrotnicę 2 na tor <b>19</b> lub <b>1а</b> (portu). Wraca za <b>М2</b>. Później inny kurs zabiera wagony z portu i wystawia skład na tor grupy do semafora wyjazdowego. Są też podstawienia na kozioł 25, tory portu 21–23, 18а i plac kontenerowy (tor 16).</p>
+    <p>Z torów bez własnego semafora lokomotywa podjeżdża do najbliższego semafora swojego kierunku — zwrotnice po drodze muszą stać prawidłowo (w trybie automatycznym przestawia je system).</p>
+    </div>
+    <h4>Odwołanie przebiegu</h4>
+    <p>Semafor → „Odwołaj … przebieg” → kod czujności. Są trzy komplety odwołania: <b>WOLN.</b> — zbliżanie wolne, 6 s; <b>MANEWR.</b> — 60 s; <b>POC.</b> — 180 s. Dopóki komplet jest zajęty (wskaźnik świeci i pokazuje sekundy), następnego odwołania tego typu nie da się rozpocząć. Kod czujności to trzy cyfry, za każdym razem nowe. Gdy włączono „Podpowiadaj kod”, jest wpisany z góry.</p>
+    <div data-station="sokologirne">
+    <h4>Prace manewrowe</h4>
+    <p>W rozkładzie widać je jako wiersze <b>МН-…</b> (żółte). Generator daje 5–12 prac na dobę: podstawienie na tor 14 (podstacja trakcyjna), kozioł 15, tor 10 (ПЧ-4), przestawienia 4→6 i 3→I z wyciąganiem za М6/М2. Gdy nadchodzi czas, lokomotywa pojawia się na odcinku początkowym, a w „Najbliższe zdarzenie” pojawia się cel pracy. Lokomotywę można też postawić samemu: kliknij odcinek → „Postaw lokomotywę manewrową”.</p>
+    </div>
+    <h4>Radio i telefonogramy (ИРП ЦД-0058, rozdział 9)</h4>
+    <p>Przycisk ze słuchawką „Radio” otwiera osobne okno (można je przeciągać). Stacja sąsiednia zgłasza wyprawienie pociągu do ciebie (formularz 3) — naciśnij „Powtórz tekst”, odpowie „Zgadza się”. Gdy twój pociąg przybył, odjechał lub przejechał bez zatrzymania, pojawia się zadanie przekazania telefonogramu (formularz 4, 3 lub 11): „Przekaż” → sąsiad powtarza → „Zgadza się”. Niewykonane w ciągu 15 minut modelowych trafia do dziennika. Gdy bez odpowiedzi zbierze się ponad 10 wiadomości, odpowiedź następuje automatycznie. Wpisy trafiają do dzienników ДУ-47 osobno dla każdego szlaku. Maszynista dzwoni, gdy stoi przed zamkniętym semaforem.</p>
+    <h4>Tryb sterowania i wskaźniki</h4>
+    <p>PODST. / REZERW. / POMOC. — w trybie pomocniczym przebiegi ustawia się dopiero po indywidualnym przestawieniu zwrotnic, a „Pomocnicze przestawienie” działa nawet pod zamkniętym przebiegiem. Przestawienie zwrotnicy przed pociągiem, który już ruszył, powoduje <b>wykolejenie lub zderzenie</b>: w lewym górnym rogu pojawi się przyczyna, a doba zacznie się od 00:00. Lampy BEZPIECZN., ZWOLN. POWT. TOR., REZERW. KW. wzięto z rysunku pulpitu; w trybie szkoleniowym włącza się je kliknięciem jako usterkę.</p>
+    <h4>Blokada zwrotnic, semaforów i odcinków</h4>
+    <p>Polecenie „Zablokuj …” otwiera okno „Przyczyna blokady”. Przyczynę można wpisać (trafi do dziennika zdarzeń) lub zostawić puste pole. Zablokowany obiekt jest oznaczony kłódką.</p>
+    <div data-station="sokologirne">
+    <h4>Wagony na kozłach</h4>
+    <p>Prace manewrowe podstawiają wagony na tory 14, 15 i 10 i zostawiają je tam (na schemacie „wag.”, odcinek czerwony), dopóki inna praca ich nie zabierze. Przebieg manewrowy na zajęty tor jest dozwolony.</p>
+    </div>
+    <div data-station="zaporizhzhia2" hidden>
+    <h4>Zaporoże II: stacja węzłowa</h4>
+    <p>Z lewej dwie linie: do Zaporoża-Liwego (wjazdowy <b>НЛ</b>) i do st. im. Anatolija Alimowa / Nikopola (wjazdowy <b>ЧМ</b>). Z prawej — tor zdawczy do Połoh (<b>НП</b>) i Zaporoże 1 (<b>ЧЗ</b>). Tor główny VIII przechodzi przez całą grupę.</p>
+    <ul>
+      <li>Ruch w prawo — parzysty: wyjazdowe <b>Ч1–Ч17</b> na prawych końcach torów, końce <b>ВП</b> i <b>ВЗ</b>. Ruch w lewo — nieparzysty: <b>Н1–Н17</b>, końce <b>ВЛ</b> i <b>ВН</b>.</li>
+      <li>Pasażerskie i EZT — na 1, 2, 3 (przy peronach), towarowe — na 5, 6, 7, 9, VIII. Tory 12–17 — wagonownia EZT РПЧ-3.</li>
+      <li>EZT kończące kurs jadą manewrami do wagonowni: wyciąganie za <b>М7</b>, potem <b>М7</b> → tor wagonowni. Później tą samą drogą z powrotem na tor przy peronie.</li>
+      <li>Inne prace: baza ПЧ-14 (powrót za <b>М43</b>), tor 37 i БМЕУ-3 (powrót za <b>М1</b>), kozioł 38 za mostem (<b>М20</b>), П/К (2) (<b>М10</b>), rampa towarowa (tor 23, <b>М30</b>), kozioł 39 (<b>М6</b>).</li>
+    </ul>
+    </div>
+    <div data-station="sivash" hidden>
+    <h4>Sywasz: stacja pośrednia dwutorowa</h4>
+    <ul>
+      <li>Z lewej — Sołone Oziero, z prawej — Salkowe. Parzyste jadą w prawo: przyjęcie <b>Ч</b> → tor II (koniec <b>Ч2</b>), 3 lub 4; wyprawienie <b>Ч2, Ч3, Ч4</b> → koniec <b>ВС</b>.</li>
+      <li>Nieparzyste jadą w lewo: przyjęcie <b>Н</b> → tor I (koniec <b>Н1</b>), 3 lub 4; wyprawienie <b>Н1, Н3, Н4</b> → koniec <b>ВД</b>.</li>
+      <li>EZT stoją 1 min przy peronach (tory 3 i 4), towarowe jadą po głównych I i II.</li>
+    </ul>
+    </div>
+    <div data-station="salkove" hidden>
+    <h4>Salkowe: stacja pośrednia dwutorowa</h4>
+    <ul>
+      <li>Z lewej — Nowooleksijiwka (Melitopol), z prawej — Sywasz. Nieparzyste w prawo po torze I: <b>Н</b> → I (koniec <b>НI</b>) lub 3 (<b>Н3</b>, przy peronie); wyprawienie → koniec <b>ВС</b>.</li>
+      <li>Parzyste w lewo po II: <b>Ч</b> → II (<b>ЧII</b>) lub 4 (<b>Ч4</b>); wyprawienie → koniec <b>ВН</b>.</li>
+      <li>Manewry: podstawienie wagonów z toru 3 na kozioł 5 (ЕЧ-4) za <b>Н3</b>.</li>
+    </ul>
+    </div>
+    <div data-station="novooleksiivka" hidden>
+    <h4>Nowooleksijiwka: stacja węzłowa, odgałęzienie do Heniczeska</h4>
+    <ul>
+      <li>Trzy kierunki: Partyzany (Melitopol) z lewej — wjazdowy <b>Н</b>, koniec <b>ВП</b>; Salkowe z prawej — wjazdowy <b>Ч</b>, koniec <b>ВС</b>; Henicześk u góry (jednotorowy) — wjazdowy <b>Чг</b>, koniec <b>ВГ</b>.</li>
+      <li>Melitopol ↔ Henicześk — przez tory <b>VI</b> i <b>8</b>. Salkowe ↔ Henicześk — przez tory <b>10</b> i <b>12</b>.</li>
+      <li>Ruch główny: nieparzyste na I, parzyste na II, przy peronach także 4 i 3; towarowe — 5, 7, 9.</li>
+      <li>Manewry: kozioł 23, tor 15а na П/К, П/К №1–3, ПЧ-4, КМС-137, tory 17/18.</li>
+    </ul>
+    </div>
+    <div data-station="henichesk" hidden>
+    <h4>Henicześk: stacja czołowa</h4>
+    <ul>
+      <li>Wszystkie pociągi przyjeżdżają z Nowooleksijiwki jednotorowym szlakiem (wjazdowy <b>Н</b>) i wracają: <b>Ч1, ЧII, Ч3</b> → koniec <b>ВН</b>.</li>
+      <li>Przyjęcie na 1, II (końce — tarcze <b>Н1М</b>, <b>НIIМ</b>) lub na tor czołowy 3. EZT są od razu gotowe do kursu powrotnego; pociągi z lokomotywą wymagają objazdu.</li>
+      <li>Objazd: lokomotywa wyjeżdża w prawo na tor <b>2а</b>, za <b>М2</b> — na sąsiedni tor do jego semafora wyjazdowego, dalej na odcinek НІП (do <b>Н</b>) i za <b>М1</b> z powrotem do składu.</li>
+      <li>Manewry z toru 3: П/К №2 (powrót <b>М3</b>) i П/К №1 (przez НІП, powrót <b>М5</b>).</li>
+    </ul>
+    </div>
+    <div data-station="dnipro" hidden>
+    <h4>Dniepr Główny: duża stacja węzłowa</h4>
+    <p>Plan datowany 22.01.2016, dlatego stacja nazywa się na nim jeszcze „Dniepropetrowsk”. Stacja należy do trasy <b>Dniepr Główny → Post Amur</b>.</p>
+    <ul>
+      <li>Z lewej cztery linie: Kajdacka (jednotorowa, wjazdowy <b>ЧК</b>, koniec <b>ВК</b>), Horiajinowe (dwutorowa: przyjazd — <b>ЧГ1</b>, odjazd — koniec <b>ВГ</b>), Suchacziwka (jednotorowa, <b>ЧГ</b>, koniec <b>ВСХ</b>). Z prawej — Post Amur: przyjazd <b>Н</b>, odjazd — koniec <b>ВА</b>.</li>
+      <li>Grupa 18 torów (20 … 1). Wyjazdowe w lewo — <b>Н20…Н1</b>, w prawo — <b>Ч20…Ч1</b>.</li>
+      <li>Tarcze do wyciągania w głowicach: pary <b>М2/М4</b>, <b>М14/М12</b>, <b>М16/М6</b> z lewej i <b>М21/М25</b>, <b>М19/М17</b>, <b>М51/М45</b> z prawej.</li>
+      <li>Na dole z lewej — grupa torów zaplecza 1еп–9еп i wagonownia; lokomotywownia, РПЧ-1 i baza ПЧ — za <b>М72</b>. U góry — tory 40, 44, П/К (2), tory towarowe 6т–8т.</li>
+      <li>Manewrów jest dużo: zmiana lokomotywy, podstawienia do grupy zaplecza, П/К, torów towarowych, wagonowni. EZT jest bardzo dużo.</li>
+    </ul>
+    </div>
+    <div data-station="amur" hidden>
+    <h4>Post Amur</h4>
+    <ul>
+      <li>Posterunek na dwutorowym szlaku Dniepr Główny — Niżniodnieprowsk. Tory IАП (896 m), 3АП (863 m), IIАП (909 m).</li>
+      <li>Nieparzyste: wjazdowy <b>НА</b> → IАП lub 3АП → <b>Н1А</b>/<b>Н3А</b> → koniec <b>ВД</b>. Parzyste: <b>ЧА</b> → IIАП lub 3АП → <b>Ч2А</b>/<b>Ч3А</b> → koniec <b>ВН</b>.</li>
+      <li>Pociągi się tu nie zatrzymują, manewrów nie ma; 3АП — do wyprzedzania.</li>
+    </ul>
+    </div>
+    <div data-station="soloneozero" hidden>
+    <h4>Sołone Oziero: stacja pośrednia dwutorowa</h4>
+    <ul>
+      <li>Z lewej — Mamut, z prawej — Sywasz. Nieparzyste w lewo: przyjęcie <b>Н</b> → tory I, 3, 5; wyprawienie <b>НI, Н3, Н5</b> → koniec <b>ВМ</b>.</li>
+      <li>Parzyste w prawo: przyjęcie <b>Ч</b> → II lub 4; wyprawienie <b>ЧII, Ч4</b> → koniec <b>ВС</b>.</li>
+      <li>Manewry: podstawienie wagonów z kozła 3а na teren ЕЧК (tory 9, 10) za <b>М12</b>, powrót za <b>М5</b>.</li>
+    </ul>
+    </div>
+    <div data-station="mamut" hidden>
+    <h4>Mamut: stacja pośrednia dwutorowa</h4>
+    <ul>
+      <li>Z lewej — Sołone Oziero, z prawej — Dżankoj. Nieparzyste w prawo po I: <b>Н</b> → I lub 3; wyprawienie → koniec <b>ВД</b>.</li>
+      <li>Parzyste w lewo po II: <b>Ч</b> → II lub 3; wyprawienie <b>ЧII, Ч3</b> → koniec <b>ВС</b>. Kozioł 4 i П/К (nieczynny, <b>М2</b>).</li>
+    </ul>
+    </div>
+    <h4>Trasa Mamut → Henicześk (kilka stacji razem)</h4>
+    <p>Mamut, Sołone Oziero, Sywasz, Salkowe, Nowooleksijiwka i Henicześk działają jednocześnie na jednym zegarze. Kierujesz jedną stacją, resztę prowadzi autodyspozytor. Pociąg wyprawiony od ciebie nie znika: gdy zwolni szlak, po czasie jazdy pojawi się na zbliżaniu stacji sąsiedniej z tym samym numerem. Pociągi z Dżankoja wjeżdżają na Mamut z zewnątrz.</p>
+    <ul>
+      <li>Pasek nad schematem pokazuje wszystkie stacje trasy, kto nimi kieruje i jakie pociągi są na szlakach. Przycisk <b>„⇄ stacja”</b> pozwala przejść na inną stację; poprzednią przejmuje autodyspozytor.</li>
+      <li>Szlak Nowooleksijiwka — Henicześk jest jednotorowy: przebieg odjazdowy się nie ustawi, dopóki jest tam pociąg z którejkolwiek strony.</li>
+    </ul>
+    <h4>Trasa Dniepr Główny → Post Amur</h4>
+    <p>Dwa posterunki na jednym zegarze. W grze sieciowej na Dnieprze Głównym mogą pracować <b>dwaj gracze jednocześnie</b>, na Poście Amur — jeden.</p>
+    <h4>Manewry: drogę wybierasz ty</h4>
+    <p>Praca manewrowa podaje tylko <b>wynik</b>: dokąd mają trafić wagony i lokomotywa. Drogę, kolejność i przebiegi wybierasz sam — dowolnymi torami i tarczami. Model sprawdza:</p>
+    <ul>
+      <li>czy wagony i lokomotywa znalazły się tam, gdzie trzeba (lista „Co ma być w wyniku” w „Najbliższe zdarzenie”);</li>
+      <li>czy ruch odbywa się tylko po przebiegu manewrowym na sygnał manewrowy;</li>
+      <li>czy lokomotywa doczepia się do składu do odjazdu od strony odjazdu;</li>
+      <li>czy przebieg manewrowy nie prowadzi na tor, na którym stoi pociąg („ruch manewrowy na pociąg zabroniony”); na tor z wagonami — można, aby się doczepić.</li>
+    </ul>
+    <p>Doczepianie i odczepianie — przyciskami „⛓ Doczep” / „✂ Odczep” w panelu pociągu lub w „Najbliższe zdarzenie”.</p>
+    <h4>Tryb „tylko manewry”</h4>
+    <p>Przebiegi pociągowe ustawia autodyspozytor, a wszystkie prace manewrowe wykonujesz ty. Ten tryb włącza się na każdej stacji: „⚙ Ustawienia” → „Autodyspozytor: tylko pociągi”. Zwrotnice na drodze do tarczy bez przebiegu przestawiaj indywidualnie.</p>
+    <h4>Postoje pociągów</h4>
+    <p>W rozkładzie kolumna „Postój” pokazuje czas postoju (np. 3 min) albo „—”, jeśli pociąg się nie zatrzymuje. Opóźnienie liczy się od faktycznego momentu przyjazdu lub odjazdu.</p>
+    <h4>Gra sieciowa</h4>
+    <p>W trybie trasy pojawia się przycisk <b>„Sieć”</b>. Jeden gracz naciska „Utwórz pokój” i przekazuje innym kod; inni wpisują kod i „Dołącz”. Każdy dostaje wolną stację; stacje bez gracza prowadzi autodyspozytor.</p>
+    <ul>
+      <li>Model liczy gospodarz (kto utworzył pokój): ma zegar, prędkość i rozkład. Inni gracze widzą jego stan i wysyłają swoje polecenia.</li>
+      <li>Połączenie — bezpośrednio między przeglądarkami (WebRTC) przez darmowy serwer PeerJS. Przycisk „W kartach” — gra między kartami jednej przeglądarki.</li>
+    </ul>
+    <h4>Wygląd</h4>
+    <p>Tło (czarne lub szare) i język interfejsu przełącza się w „⚙ Ustawienia”. Duże stacje są szersze niż ekran: schemat można przewijać w lewo-prawo — paskiem, przeciąganiem myszą lub Shift+kółko; „SKALA” +/− zmienia skalę, ▭ dopasowuje stację do szerokości okna.</p>
+    <p>„▣ Tylko pulpit” zwija wszystko oprócz pulpitu. „⏱ Czas” — start/pauza, prędkość ×0.1–×4 (przy ×1 doba modelowa trwa 1 godzinę), przewinięcie do zdarzenia, reset doby. Informacje o pociągu — kliknij wiersz w rozkładzie lub pociąg na schemacie.</p>
+    <h4>Legenda</h4>
+    <div class="legend">
+      <div><span class="tube"></span>Odcinek wolny</div>
+      <div><span class="tube setting"></span>Bierze udział w przebiegu (nastawianie, zwrotnice się przestawiają)</div>
+      <div><span class="tube lk-train"></span>Zamknięty w przebiegu pociągowym</div>
+      <div><span class="tube lk-shunt"></span>Zamknięty w przebiegu manewrowym</div>
+      <div><span class="tube occ"></span>Zajęty (pociąg, wagony)</div>
+      <div><span class="tube blocked"></span>Zablokowany</div>
+      <div><span class="dot" style="background:#ff2b2b"></span><span class="dot" style="background:#2fe05a"></span>Semafor: zamknięty / otwarty</div>
+      <div><span class="dot sm" style="background:#2f6bff"></span><span class="dot sm" style="background:#fff"></span>Tarcza manewrowa: niebieska / biała</div>
+      <div><span class="dot" style="background:#ff2b2b"></span><span class="dot sm" style="background:#fff"></span>Sygnał zastępczy (czerwony + biały pierścień)</div>
+      <div><b class="swnum">17</b>Żółty numer: zwrotnica w minusie; miga — przestawia się; czerwony — brak kontroli</div>
+      <div><b>tow / pas / IC+ / ezt / gosp / rez / man</b>&nbsp;Typy w rozkładzie: towarowy, pasażerski, Intercity+, EZT, gospodarczy, lokomotywa rezerwowa, manewrowy</div>
+    </div>
+    <h4>Wykres ruchu</h4>
+    <p>Czas w poziomie; pasmo w środku — twoja stacja, nad nim — szlaki z lewej strony, pod nim — z prawej (każdy kierunek w osobnym wierszu). Pociąg rysowany jest od tego kierunku, z którego naprawdę przyjeżdża, i do tego, w który odjeżdża. Przerywana — plan z rozkładu, ciągła — faktyczny przejazd. Poziomy odcinek na stacji — postój. Żółte pasy — manewry. Czerwona pionowa — bieżący czas.</p>
+    <h4>Usterki i polecenia odpowiedzialne</h4>
+    <ul>
+      <li><b>Fałszywa zajętość</b> odcinka (menu odcinka → „Szkolenie”): przebieg przez niego się nie ustawia. Pociąg przyjmuje się na <b>sygnał zastępczy</b> (≤20 km/h). Zwrotnicę na takim odcinku przestawia się „Pomocniczym przestawieniem”.</li>
+      <li><b>Utrata kontroli zwrotnicy</b>: świeci ROZPRUCIE ZWR., przebiegi przez zwrotnicę są niemożliwe, dopóki kontrola nie zostanie przywrócona.</li>
+      <li><b>Sztuczne zwolnienie</b> odcinka, który pozostał zamknięty: 3 min, miga SZ.</li>
+      <li>Liczniki liczą sygnały zastępcze (SZ), pomocnicze przestawienia (PP) i sztuczne zwolnienia (SZW).</li>
+    </ul>
+    <h4>Informacje historyczne</h4>
+    <p>Teksty w zakładce „Informacje historyczne” pozostają w języku ukraińskim (cytaty ze źródeł).</p>
+    </div>
     <div class="btns"><button id="helpClose">Зрозуміло</button></div>
   </div>
 </div>
@@ -379,6 +557,18 @@
   </div>
 </div>
 
+<div id="blkDlg" class="modal-bg" hidden>
+  <div class="blk-win" role="dialog" aria-modal="true" aria-labelledby="blkTitle">
+    <div class="blk-title" id="blkTitle">Причина блокування</div>
+    <div class="blk-body">
+      <div id="blkText">Вкажіть причину блокування стрілки</div>
+      <textarea id="blkReason" rows="4" maxlength="200" aria-label="Причина блокування"></textarea>
+    </div>
+    <div class="blk-btns"><button id="blkOk">Заблокувати</button><button id="blkCancel">Скасувати</button></div>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
 <script src="js/topology.js"></script>
 <script src="js/schedule.js"></script>
 <script src="js/generator.js"></script>
@@ -393,7 +583,6 @@
 <script src="js/amur.js"></script>
 <script src="js/soloneozero.js"></script>
 <script src="js/mamut.js"></script>
-<script src="js/dzhankoi.js"></script>
 <script src="js/station.js"></script>
 <script src="js/history.js"></script>
 <script src="js/engine.js"></script>
