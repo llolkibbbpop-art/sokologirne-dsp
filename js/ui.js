@@ -1442,14 +1442,18 @@
   (function dragPan() {
     const wrap = $("schemeWrap"); let d = null;
     wrap.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0 || e.pointerType === "touch" || wrap.scrollWidth <= wrap.clientWidth + 2 || e.target.closest(".indbar")) return;
-      d = { x: e.clientX, y: e.clientY, sl: wrap.scrollLeft, moved: false, id: e.pointerId };
+      if (e.button !== 0 || e.pointerType === "touch" || e.target.closest(".indbar")) return;
+      d = { x: e.clientX, y: e.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop, wy: window.scrollY, moved: false, id: e.pointerId };
     });
+    // drag in any direction: sideways scrolls the plan, up / down scrolls the plan (when it is taller than its window) or the page
     wrap.addEventListener("pointermove", (e) => {
       if (!d || e.pointerId !== d.id) return;
-      const dx = e.clientX - d.x;
-      if (!d.moved && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(e.clientY - d.y)) { d.moved = true; wrap.classList.add("panning"); try { wrap.setPointerCapture(d.id); } catch (er) { /* ignore */ } }
-      if (d.moved) wrap.scrollLeft = d.sl - dx;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (!d.moved && Math.hypot(dx, dy) > 6) { d.moved = true; wrap.classList.add("panning"); try { wrap.setPointerCapture(d.id); } catch (er) { /* ignore */ } }
+      if (!d.moved) return;
+      wrap.scrollLeft = d.sl - dx;
+      if (wrap.scrollHeight > wrap.clientHeight + 2) wrap.scrollTop = d.st - dy;
+      else window.scrollTo(window.scrollX, d.wy - dy);
     });
     const end = () => { if (!d) return; const m = d.moved; d = null; wrap.classList.remove("panning"); if (m) { wrap.__dragged = true; setTimeout(() => (wrap.__dragged = false), 0); } };
     wrap.addEventListener("pointerup", end); wrap.addEventListener("pointercancel", end);

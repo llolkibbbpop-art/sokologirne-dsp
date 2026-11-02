@@ -687,12 +687,12 @@ button.lamp-box { cursor: pointer; }
   color-scheme: light;
 }
 /* the black console screens keep the АРМ palette */
-.scheme-wrap, .gwrap, .rku-card .il, .line-strip .ls-gap .tr { --panel: #0f0f0f; --panel-2: #1b1b1b; --line: #3d3d3d; --fg: #f2f2f2; --muted: #a9a9a9; --accent: #ffffff; --warn: #ffb23e; --occ: #ff4a3d; --route: #3ecf6b; color-scheme: dark; }
+.scheme-wrap, .gwrap, .line-strip .ls-gap .tr, .rku-card, .info-pop, .modal-bg, .radio-win, .ctx-menu, .accident { --panel: #0f0f0f; --panel-2: #1b1b1b; --line: #3d3d3d; --fg: #f2f2f2; --muted: #a9a9a9; --accent: #ffffff; --warn: #ffb23e; --occ: #ff4a3d; --route: #3ecf6b; color-scheme: dark; }
 
 html { background: #1d4f80 linear-gradient(160deg, #3b7cbc 0%, #1f5a94 45%, #123c69 100%) fixed; min-height: 100%; }
 html.grey-console { background: #585858; }
 body { color: var(--w7-text); background: var(--w7-face); max-width: 1920px; margin: 10px auto 18px; padding: 0 0 10px;
-  border: 1px solid #1b2f48; border-radius: 7px 7px 4px 4px; box-shadow: 0 0 0 5px rgba(205,224,245,.55), 0 14px 40px rgba(0,0,0,.45); overflow: clip; width: calc(100% - 28px); }
+  border: 1px solid #1b2f48; border-radius: 7px 7px 4px 4px; box-shadow: 0 0 0 5px rgba(205,224,245,.55), 0 14px 40px rgba(0,0,0,.45); width: calc(100% - 28px); }
 body > section, body > .banner, body > .tabs, body > footer { margin-inline: 10px; }
 
 /* ---- title bar (glass) with the command bar under it ---- */
@@ -783,32 +783,6 @@ select:hover, input:hover, textarea:hover { border-color: #7eb4ea; }
 .sheet tr.ev.sel td, .sheet tr.ev.sel.act td, .sheet tr.ev.sel.wait td { background: #cce8ff; }
 .filters button.on { font-weight: 400; }
 
-/* ---- windows: object panel, train card, dialogs, radio ---- */
-.rku-card, .info-pop { padding: 0 0 10px; border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(190,211,236,.85), 0 10px 26px rgba(0,0,0,.4); background: var(--w7-face); }
-.rku-card h2 { margin: 0; padding: 6px 8px 6px 12px; background: var(--w7-glass); border-bottom: 1px solid #8ea6c4; border-radius: 5px 5px 0 0; color: #000; text-shadow: 0 0 6px #fff; display: flex; align-items: center; justify-content: space-between; }
-.rku-card > div { padding: 8px 12px 0; }
-.sheet-close, .win-title button, #radioClose, #accClose { min-width: 40px; height: 20px; padding: 0 8px; line-height: 18px; color: #fff; font-weight: 700; border: 1px solid #5c1b10; border-radius: 3px;
-  background: linear-gradient(180deg, #e8a493 0%, #d36d55 49%, #c2401f 50%, #d0603f 100%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); text-shadow: 0 0 2px #000; }
-.sheet-close:hover, .win-title button:hover, #radioClose:hover, #accClose:hover { background: linear-gradient(180deg, #f2b8a9 0%, #e7826a 49%, #d84d2b 50%, #ea7350 100%); }
-.modal-bg { background: rgba(10,30,60,.35); }
-.modal { background: var(--w7-face); color: #000; border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(190,211,236,.85), 0 12px 34px rgba(0,0,0,.45); }
-.modal.win, .blk-win { padding: 0; background: var(--w7-face); border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(190,211,236,.85), 0 12px 34px rgba(0,0,0,.45); }
-.win-title, .blk-title, .radio-head { background: var(--w7-glass); color: #000; text-shadow: 0 0 6px #fff; border-bottom: 1px solid #8ea6c4; border-radius: 5px 5px 0 0; padding: 5px 6px 5px 10px; font-weight: 400; }
-.blk-title { text-align: left; }
-.win-title .hint, .radio-head .hint { color: #1e395b; }
-.m-btns button, .blk-btns button { min-width: 88px; background: var(--w7-btn); border: 1px solid var(--w7-border); border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.75); padding: 4px 12px; }
-.m-btns button:hover, .blk-btns button:hover { background: var(--w7-btn-hot); border-color: #3c7fb1; }
-.m-btns button:active, .blk-btns button:active { background: var(--w7-btn-down); border-color: #2c628b; }
-.m-code input { border: 1px solid #abadb3; border-radius: 2px; }
-.blk-btns { background: #f0f0f0; border-top: 1px solid #dfdfdf; }
-.blk-body textarea { background: #fff; border: 1px solid #abadb3; }
-.radio-win { background: var(--w7-face); color: #000; border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(190,211,236,.85), 0 12px 34px rgba(0,0,0,.45); }
-.ctx-menu { background: #f0f0f0; border: 1px solid #979797; box-shadow: 3px 3px 4px rgba(0,0,0,.28); }
-.ctx-menu button { background: transparent; box-shadow: none; border: 1px solid transparent; }
-.ctx-menu button:hover { background: var(--w7-sel); border-color: #b8d6fb; }
-.accident { background: #fff; color: #000; border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(236,190,190,.9), 0 10px 28px rgba(0,0,0,.45); }
-.accident b { color: #c00000; }
-.modal.help h4 { color: var(--w7-blue); }
 .net-panel .nb-code { border-color: #000; background: #fff; }
 .net-panel .nb-err { color: #c00000; }
 .hist-item a { color: #0066cc; }
@@ -857,20 +831,51 @@ body.grey-console .clockbox { background: linear-gradient(#5a5a5a, #3a3a3a); }
   .indbar .igrp { flex: none; }
   .il i { width: 28px; height: 8px; }
   .cols { margin-top: 8px; }
-  .rku-card.open, .info-pop.open { border-radius: 8px 8px 0 0; box-shadow: 0 -6px 22px rgba(0,0,0,.35); padding-bottom: env(safe-area-inset-bottom, 0px); }
-  .rku-card.open h2 { border-radius: 7px 7px 0 0; }
-  button { min-height: 34px; }
-  .indbar button, .seg button, .sheet button, .ls-st { min-height: 0; }
 }
 @media (max-width: 720px) and (orientation: landscape) {
   .banner, .tabs { display: none; }
 }
 /* phones: the diagram is a window of its own that scrolls both ways; the indicator strip stays on top */
 @media (max-width: 720px) {
-  .scheme-wrap { max-height: calc(100svh - 150px); min-height: 260px; overflow: auto; overscroll-behavior: contain; }
+  .scheme-wrap { max-height: calc(100svh - 150px); min-height: 260px; overflow: auto; overscroll-behavior-x: contain; }
   .indbar { position: sticky; top: 0; left: 0; z-index: 2; background: var(--sch-bg); width: 100%; }
   .banner { max-height: 2.6em; }
 }
 @media (min-width: 721px) { .indbar { gap: 8px 12px; } .indbar .igcap, .il .ilc { letter-spacing: 0; } }
 .net-panel .nb-req { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; margin: 6px 0; background: #ffffe1; border: 1px solid #c8b56c; }
 .net-panel .nb-pl button { margin-left: auto; min-width: 0; min-height: 0; padding: 0 7px; }
+
+/* the windows that open when working with objects (object panel, train card, confirmations, block reason,
+   radio, help) keep their earlier АРМ look: square, white on black, classic grey dialogs */
+:is(.rku-card, .info-pop, .modal-bg, .radio-win, .ctx-menu, .accident), :is(.rku-card, .info-pop, .modal-bg, .radio-win, .ctx-menu, .accident) * { border-radius: 0 !important; }
+:is(.rku-card, .info-pop, .modal, .radio-win) :is(button, select, input, textarea) { color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); box-shadow: none; padding: 5px 9px; outline: 0; }
+:is(.rku-card, .info-pop, .modal, .radio-win) button:hover { background: var(--panel-2); border-color: var(--accent); }
+:is(.rku-card, .info-pop, .modal, .radio-win) button.on, :is(.rku-card, .info-pop, .modal, .radio-win) button:active { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); border-color: var(--accent); }
+:is(.rku-card, .info-pop, .modal, .radio-win) button.danger { color: var(--fg); border-color: color-mix(in srgb, var(--occ) 60%, var(--line)); }
+:is(.rku-card, .info-pop, .modal, .radio-win) button:disabled { background: var(--panel-2); border-color: var(--line); color: var(--fg); opacity: .45; }
+:is(.rku-card, .info-pop, .modal, .radio-win) :is(button, input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; box-shadow: none; }
+.rku-card, .info-pop { background: var(--panel); color: var(--fg); border: 1px solid var(--accent); }
+.rku-card h2 { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; border-bottom: 0; padding-bottom: 0; }
+:is(.rku-card, .info-pop, .modal, .radio-win) .hint { color: var(--muted); }
+:is(.rku-card, .info-pop, .modal) .pill { background: none; border-color: var(--line); }
+:is(.rku-card, .info-pop) .p-active { color: var(--fg); border-color: var(--route); }
+:is(.rku-card, .info-pop) .p-waiting, :is(.rku-card, .info-pop) .p-delayed { color: #111; background: var(--warn); border-color: var(--warn); }
+:is(.rku-card, .info-pop) .advice { background: var(--panel-2); border-left-color: var(--accent); color: var(--fg); }
+:is(.rku-card, .info-pop) .late, :is(.rku-card, .info-pop) .adv-note { color: var(--occ); }
+.modal { color: var(--fg); }
+.modal.help h4 { color: var(--accent); }
+/* classic grey dialogs and radio sheets as before */
+.modal.win .m-btns button, .blk-win .blk-btns button { color: #000; padding: 4px 12px; }
+.modal.win .m-btns button { background: #d4d0c8; border: 1px solid; border-color: #fff #404040 #404040 #fff; box-shadow: 1px 1px 0 #000; }
+.modal.win .m-btns button:active { border-color: #404040 #fff #fff #404040; box-shadow: none; }
+.modal.win .win-title button { background: #d4d0c8; color: #000; border: 1px solid; border-color: #fff #404040 #404040 #fff; padding: 0 6px; }
+.modal.win .m-code input { background: #fff; color: #000; border: 1px solid; border-color: #404040 #fff #fff #404040; padding: 2px 6px; }
+.blk-win .blk-btns button { background: linear-gradient(#f6f6f6, #dadada); border: 1px solid #8c8c8c; padding: 5px 10px; }
+.blk-win .blk-body textarea { background: #f4f4f4; color: #000; border: 1px solid #9aa6ff; }
+.radio-win .sheet th, .radio-win table.sheet th { background: #e8e8e8; color: #222; font-weight: 600; border: 1px solid #b9b9b9; }
+.radio-win .sheet td, .radio-win table.sheet td { border: 1px solid #d6d6d6; }
+.radio-win table.sheet button { background: #e6e6e6; color: #111; border: 1px solid #8a8a8a; padding: 1px 8px; }
+.radio-win .radio-live, .radio-win .radio-journal { border: 1px solid #8f8f8f; }
+@media (max-width: 720px) { .toolbar button, .cols button, .graph-card button, .drop-panel button { min-height: 34px; } .seg button { min-height: 0; } }
+.blk-win .blk-body textarea:focus-visible, .blk-win .blk-body textarea:hover { outline: revert; box-shadow: none; border-color: #9aa6ff; }
+.blk-win .blk-btns button:focus-visible { outline: revert; box-shadow: none; }
