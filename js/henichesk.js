@@ -43,6 +43,7 @@
       { id: "М3", node: "M3n", dir: "R", kind: "shunt", note: "виїзд з П/К №2" },
       { id: "М5", node: "M5n", dir: "L", kind: "shunt", note: "виїзд з П/К №1" },
       { id: "М4", node: "M4n", dir: "L", kind: "shunt", note: "виїзд з тупика 10" },
+      { id: "М8", node: "R1", dir: "L", kind: "shunt", dx: -46, note: "з ходу за стрілкою 10 на колію 1 (за планом — біля стрілки 10)" },
       { id: "М2", node: "M2n", dir: "L", kind: "shunt", note: "виїзд з колії 2а (вантажний парк Б) у парк" }
     ],
     park: [
