@@ -1,0 +1,1 @@
+{ "name": "arm-dsp-build", "private": true, "description": "builds dist/: one minified, obfuscated bundle", "scripts": { "build": "node build.js" } }

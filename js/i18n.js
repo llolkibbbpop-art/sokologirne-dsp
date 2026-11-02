@@ -13,6 +13,14 @@
 
   // ---------------------------------------------------------------- whole sentences (exact, trimmed)
   const EXACT = {
+    "Прийняти": "Przyjmij", "Відхилити": "Odrzuć", "Вигнати гравця з кімнати": "Usuń gracza z pokoju",
+    "Запит надіслано — чекаємо, поки ведучий прийме вас у гру…": "Prośba wysłana — czekamy, aż prowadzący przyjmie cię do gry…",
+    "Зв'язок напряму між браузерами (WebRTC, шифрований). Код кімнати має дві частини: назву кімнати і секретний ключ. Кожного гравця ведучий приймає вручну і може вигнати з гри.":
+      "Połączenie bezpośrednio między przeglądarkami (WebRTC, szyfrowane). Kod pokoju ma dwie części: nazwę pokoju i tajny klucz. Każdego gracza prowadzący przyjmuje ręcznie i może usunąć z gry.",
+    "Ліцензії": "Licencje",
+    "Шрифт: GNU Unifont (SIL Open Font License 1.1). Гра по мережі: PeerJS (ліцензія MIT). Решта тренажера: © автор проєкту, усі права захищені.":
+      "Czcionka: GNU Unifont (SIL Open Font License 1.1). Gra sieciowa: PeerJS (licencja MIT). Pozostałe części symulatora: © autor projektu, wszelkie prawa zastrzeżone.",
+    "Навчальний тренажер. Назви блоків, поділ колій на блоки, довжини поїздів і графік — модельні.": "Symulator szkoleniowy. Nazwy odstępów, podział torów na odstępy, długości pociągów i rozkład są modelowe.",
     "АРМ ДСП": "Stanowisko DR",
     "Навчальна симуляція. Не підключена до реальної залізничної інфраструктури. Час подій у графіку вигаданий, це не архівний графік руху станції.":
       "Symulacja szkoleniowa. Niepodłączona do rzeczywistej infrastruktury kolejowej. Czasy zdarzeń w rozkładzie są wymyślone, to nie jest archiwalny rozkład jazdy stacji.",
@@ -73,6 +81,10 @@
 
   // ---------------------------------------------------------------- phrases (inside longer texts)
   const PHRASES = [
+    ["хоче приєднатися", "chce dołączyć"], ["Передайте код лише тим, з ким граєте", "Przekaż kod tylko tym, z kim grasz"], ["Невірний код кімнати.", "Nieprawidłowy kod pokoju."],
+    ["Ведучий відхилив запит.", "Prowadzący odrzucił prośbę."], ["Ведучий завершив вашу участь у грі.", "Prowadzący zakończył twój udział w grze."], ["Ведучий не пускає вас у цю кімнату.", "Prowadzący nie wpuszcza cię do tego pokoju."],
+    ["Невірні параметри команди", "Nieprawidłowe parametry polecenia"], ["Невідома команда", "Nieznane polecenie"], ["команду не виконано", "polecenie niewykonane"],
+    ["код кімнати має вигляд", "kod pokoju ma postać"], ["ведучий не відповів на запит", "prowadzący nie odpowiedział na prośbę"],
     ["АРМ ДСП", "Stanowisko DR"], ["АРМ", "stanowisko"], ["комп'ютер АРМ", "komputer stanowiska"], ["ЗАПОБІЖН. (ПРЕДОХР.)", "BEZPIECZN."], ["УПОВІЛЬН. КОЛ. ПОВТ. (ЗАМЕДЛ. ПУТ. ПОВТ.)", "ZWOLN. POWT. TOR."],
     ["УПОВІЛЬН. КОЛ.ПОВТ.", "ZWOLN. POWT. TOR."], ["РЕЗЕРВ. КВ.", "REZERW. KW."], ["РОЗРІЗ СТР.", "ROZPRUCIE ZWR."], ["ЗАПОБІЖН.", "BEZPIECZN."], ["ОСНОВН.", "PODST."], ["РЕЗЕРВН.", "REZERW."],
     ["ДОПОМІЖ.", "POMOC."], ["ПОЇЗД.", "POC."], ["ВІЛЬН.", "WOLN."], ["МАНЕВР.", "MANEWR."], ["РЕЖИМ УПРАВЛ.", "TRYB STER."], ["ВІДМІНА", "ODWOŁ."], ["РУЧНЕ", "RĘCZNY"], ["МАНЕВРИ", "MANEWRY"],

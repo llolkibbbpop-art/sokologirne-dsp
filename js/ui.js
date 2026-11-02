@@ -40,6 +40,8 @@
   const sy = (y) => VY0 + (y - VY0) * (ui.vs || 1);
   const pt = (n) => { const p = (T.displayNodes && T.displayNodes[n]) || T.nodes[n]; return [p[0], sy(p[1])]; };
   const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  // set a text only when it changed (an unchanged write still replaces the text node and costs a relayout)
+  const setT = (n, v) => { if (n && n.__t !== v) { n.__t = v; n.textContent = v; } };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const trackName = (g) => (g ? "колія " + g.replace("П", "") : "");
   const endBtn = (e) => (T.endButtons || []).find((b) => b.id === e);
@@ -122,11 +124,15 @@
   }
 
   // a pixel-art padlock (blocked switch / signal), u — size of one pixel; x, y — top left corner
+  // the picture is built on first use: most padlocks are never shown, and a station has hundreds of them
   function padlock(parent, x, y, u) {
-    const g = el("g", { class: "padlock", transform: `translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${u})` }, parent);
-    [["pl-sh", 3, 0, 6, 2], ["pl-sh", 2, 1, 2, 5], ["pl-sh", 8, 1, 2, 5], ["pl-b0", 0, 6, 12, 8], ["pl-b1", 1, 6, 10, 6], ["pl-b2", 1, 12, 10, 1],
-      ["pl-k", 5, 8, 3, 3], ["pl-b1", 7, 10, 1, 1]].forEach(([c, a, b, w, h]) => el("rect", { x: a, y: b, width: w, height: h, class: c }, g));
-    return g;
+    let g = null, on = false;
+    const make = () => {
+      g = el("g", { class: "padlock", transform: `translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${u})` }, parent);
+      [["pl-sh", 3, 0, 6, 2], ["pl-sh", 2, 1, 2, 5], ["pl-sh", 8, 1, 2, 5], ["pl-b0", 0, 6, 12, 8], ["pl-b1", 1, 6, 10, 6], ["pl-b2", 1, 12, 10, 1],
+        ["pl-k", 5, 8, 3, 3], ["pl-b1", 7, 10, 1, 1]].forEach(([c, a, b, w, h]) => el("rect", { x: a, y: b, width: w, height: h, class: c }, g));
+    };
+    return { show(v) { v = !!v; if (v === on) return; on = v; if (v && !g) make(); if (g) g.style.display = v ? "" : "none"; } };
   }
   function buildSvg() {
     svg.innerHTML = "";
@@ -329,7 +335,7 @@
     });
     setLayer = el("g", { class: "pick" }, svg);
     pickLayer = el("g", { class: "pick" }, svg);
-    trainLayer = el("g", {}, svg);
+    trainLayer = el("g", {}, svg); ui.trainKey = null;
     renderScheme();
   }
 
@@ -372,22 +378,37 @@
     });
     for (const [id, e] of Object.entries(swEls)) {
       const st = S.sw[id];
-      e.t.setAttribute("class", "sw-label" + (st.pos === "-" ? " minus" : "") + (st.moving ? " moving" : "") + (st.lost ? " lost" : "") + (ui.sel && ui.sel.kind === "sw" && ui.sel.id === id ? " sel" : ""));
-      e.lk.style.display = st.lockedInd ? "" : "none";
+      const c = "sw-label" + (st.pos === "-" ? " minus" : "") + (st.moving ? " moving" : "") + (st.lost ? " lost" : "") + (ui.sel && ui.sel.kind === "sw" && ui.sel.id === id ? " sel" : "");
+      const k = c + (st.lockedInd ? 1 : 0) + (st.handle ? 1 : 0) + (st.blocked ? 1 : 0);
+      if (e.k === k) continue;
+      e.k = k;
+      e.t.setAttribute("class", c);
+      e.lk.show(st.lockedInd);
       e.hd.style.display = st.handle ? "" : "none";
       e.sq.style.display = st.blocked ? "" : "none";
     }
     for (const [id, e] of Object.entries(sigEls)) {
       const sg = D.signals[id], st = S.sig[id];
       const c = st.open ? (st.aspect === "white" ? LAMP.white : LAMP.green) : sg.kind === "shunt" ? LAMP.blue : LAMP.red;
-      if (e.lamp.style.fill !== c) e.lamp.style.fill = c;
+      const sel = !!(ui.sel && ui.sel.kind === "sig" && ui.sel.id === id), tg = !!(pickEnds && pickEnds.ends.has(id)), sta = !!(ui.pick && ui.pick.from === id);
+      const k = c + (st.inv ? 1 : 0) + (st.blocked ? 1 : 0) + (sel ? 1 : 0) + (tg ? 1 : 0) + (sta ? 1 : 0);
+      if (e.k === k) continue;
+      e.k = k;
+      e.lamp.style.fill = c;
       e.inv.style.display = st.inv ? "" : "none";
-      e.blk.style.display = st.blocked ? "" : "none";
-      e.g.classList.toggle("sel", !!(ui.sel && ui.sel.kind === "sig" && ui.sel.id === id));
-      e.g.classList.toggle("target", !!(pickEnds && pickEnds.ends.has(id)));
-      e.g.classList.toggle("start", !!(ui.pick && ui.pick.from === id));
+      e.blk.show(st.blocked);
+      e.g.classList.toggle("sel", sel);
+      e.g.classList.toggle("target", tg);
+      e.g.classList.toggle("start", sta);
     }
     for (const [id, e] of Object.entries(endEls)) e.g.classList.toggle("target", !!(pickEnds && pickEnds.ends.has(id)));
+    renderSetLine();
+    // trains, wagons and section tags: the layer is rebuilt only when what it shows has changed
+    let tk = "";
+    for (const id in S.sec) { const st = S.sec[id]; if (st.shoe || st.fence) tk += id + (st.shoe ? "s" : "") + (st.fence ? "f" : "") + ";"; if (st.wagons && st.occ == null) tk += id + "w" + (st.wagons.consist || "") + (st.wagons.ready ? 1 : 0) + st.wagons.num + ";"; }
+    for (const tr of S.trains) if (!tr.done) { const ev = tr.eventIdx != null ? S.events[tr.eventIdx] : null; tk += tr.num + "@" + tr.seq[tr.idx] + ":" + (ev ? sim.lateMin(ev) : 0) + tr.status + ";"; }
+    if (ui.trainKey === tk) return;
+    ui.trainKey = tk;
     trainLayer.innerHTML = "";
     // a brake shoe on a track, a fenced track (p.159): a small tag over the section
     Object.entries(S.sec).forEach(([id, st]) => {
@@ -398,7 +419,6 @@
       el("rect", { x: -bw / 2, y: -8, width: bw, height: 15 }, g);
       el("text", { x: 0, y: 4, "text-anchor": "middle" }, g).textContent = lab;
     });
-    renderSetLine();
     Object.entries(S.sec).forEach(([id, st]) => {
       if (!st.wagons || st.occ != null) return;
       const [x, y] = secMid(id);
@@ -550,20 +570,21 @@
     const S = sim.S;
     const kit = (k) => { const rid = S.kits[k]; if (!rid) return null; const st = S.routes[rid]; return st ? Math.max(0, st.until - S.time) : null; };
     [["indFree", "free", "ВІЛЬН."], ["indTrain", "train", "ПОЇЗД."], ["indShunt", "shunt", "МАНЕВР."]].forEach(([id, k, name]) => {
-      const left = kit(k); $(id).classList.toggle("lit", left != null); $(id).querySelector(".ilc").textContent = left != null ? name + " " + left : name;
+      const left = kit(k); $(id).classList.toggle("lit", left != null); setT($(id).querySelector(".ilc"), left != null ? name + " " + left : name);
     });
     $("indCancel").classList.toggle("lit", Object.values(S.kits).some(Boolean));
     $("modeMain").classList.toggle("lit-g", S.mode === "main"); $("modeRes").classList.toggle("lit-g", S.mode === "reserve"); $("modeAux").classList.toggle("lit", S.mode === "aux");
     $("indFuse").classList.toggle("lit", S.faults.fuse); $("indSlow").classList.toggle("lit", S.faults.slow); $("indKv").classList.toggle("lit", S.faults.kv);
     $("indIR").classList.toggle("lit", Object.values(S.sec).some((s) => s.artUntil != null));
     $("indCut").classList.toggle("lit", Object.values(S.sw).some((s) => s.lost));
-    $("indPlace").textContent = S.place === "panel" ? "ПУЛЬТ" : "АРМ ДСП";
-    $("indAuto").textContent = S.auto === "trains" ? "МАНЕВРИ" : S.auto ? "АВТО" : "РУЧНЕ";
+    setT($("indPlace"), String(S.place === "panel" ? "ПУЛЬТ" : "АРМ ДСП"));
+    setT($("indAuto"), String(S.auto === "trains" ? "МАНЕВРИ" : S.auto ? "АВТО" : "РУЧНЕ"));
     $("indAuto").classList.toggle("on", !!S.auto);
     const ld = S.lastDir, any = Object.values(S.routes).length > 0;
-    $("dirL").className = "dir-arrow" + (any && ld && ld.dir === "L" ? " " + ld.mode : "");
-    $("dirR").className = "dir-arrow" + (any && ld && ld.dir === "R" ? " " + ld.mode : "");
-    $("cntInv").textContent = S.counters.inv; $("cntAux").textContent = S.counters.aux; $("cntArt").textContent = S.counters.art;
+    const cL = "dir-arrow" + (any && ld && ld.dir === "L" ? " " + ld.mode : ""), cR = "dir-arrow" + (any && ld && ld.dir === "R" ? " " + ld.mode : "");
+    if ($("dirL").className !== cL) $("dirL").className = cL;
+    if ($("dirR").className !== cR) $("dirR").className = cR;
+    setT($("cntInv"), String(S.counters.inv)); setT($("cntAux"), String(S.counters.aux)); setT($("cntArt"), String(S.counters.art));
   }
 
   // ---------- panels ----------
@@ -857,11 +878,11 @@
     // rebuild whenever the day's timetable object changes (new day, new variant, reset) or grows (test train)
     if (full || tb.rows.length !== S.events.length || ui.evRef !== S.events) {
       ui.evRef = S.events;
-      $("evDay").textContent = "· доба " + S.day + " · " + S.events.length + " подій";
+      setT($("evDay"), String("· доба " + S.day + " · " + S.events.length + " подій"));
       const date = dateStr(S.day);
       tb.innerHTML = S.events.map((ev, i) => {
         const [f, t] = ends(ev);
-        return `<tr class="ev" data-i="${i}"><td><b>${esc(ev.ev.train)}</b></td><td>${date}</td><td class="tm">${esc(ev.ev.time)}</td><td>${typeShort[ev.ev.type] || ""}</td><td class="stp">${ev.ev.stopMin ? ev.ev.stopMin + " хв" : "—"}</td><td>${esc(f)}</td><td>${esc(t)}</td></tr>`;
+        return `<tr class="ev" data-i="${i}"><td><b>${esc(ev.ev.train)}</b></td><td>${date}</td><td class="tm">${esc(ev.ev.time)}</td><td>${typeShort[ev.ev.type] || ""}</td><td class="stp">${+ev.ev.stopMin ? (+ev.ev.stopMin) + " хв" : "—"}</td><td>${esc(f)}</td><td>${esc(t)}</td></tr>`;
       }).join("");
     }
     S.events.forEach((ev, i) => {
@@ -954,8 +975,10 @@
     const [cls, txt] = statusInfo(ev);
     const [nf, nt] = ends(ev);
     const html = `<div class="next"><span class="big">${esc(ev.ev.train)}</span><span>${esc(typeShort[ev.ev.type] || "")} · ${esc(nf)} — ${esc(nt)} · <span class="pill ${cls}">${esc(txt)}</span></span>
-      <span class="hint">о ${E.fmt(at).slice(0, 5)}</span><span>${late > 0 ? `<b class="late">Запізнюється на ${late} хв</b>` : dt > 0 ? "через " + Math.floor(dt / 60) + " хв " + (dt % 60) + " с" : "зараз"}${ev.delayMin ? " · задана затримка " + ev.delayMin + " хв" : ""}</span></div>` + adviceHtml(ev);
+      <span class="hint">о ${E.fmt(at).slice(0, 5)}</span><span>${late > 0 ? `<b class="late">Запізнюється на ${late} хв</b>` : dt > 0 ? '<span class="ncd"></span>' : "зараз"}${ev.delayMin ? " · задана затримка " + ev.delayMin + " хв" : ""}</span></div>` + adviceHtml(ev);
     if ($("nextBox").__h !== html) { $("nextBox").innerHTML = html; $("nextBox").__h = html; }
+    // the countdown changes every second: only its own text is rewritten
+    if (dt > 0 && !(late > 0)) setT($("nextBox").querySelector(".ncd"), "через " + Math.floor(dt / 60) + " хв " + (dt % 60) + " с");
   }
 
   function renderTrain() {
@@ -1013,8 +1036,8 @@
   function renderClock() {
     const S = sim.S, t = S.time;
     const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = t % 60;
-    $("clock").textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0") + "." + String(ss).padStart(2, "0");
-    $("dateLine").textContent = dateStr(S.day) + (S.paused ? " · зупинено" : "");
+    setT($("clock"), String(String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0") + "." + String(ss).padStart(2, "0")));
+    setT($("dateLine"), String(dateStr(S.day) + (S.paused ? " · зупинено" : "")));
     $("acH").setAttribute("transform", "rotate(" + (((hh % 12) + mm / 60) * 30) + ")");
     $("acM").setAttribute("transform", "rotate(" + ((mm + ss / 60) * 6) + ")");
     $("acS").setAttribute("transform", "rotate(" + (ss * 6) + ")");
@@ -1045,14 +1068,14 @@
   })();
   function drawGraph(force) {
     const S = sim.S, cv = $("graph");
-    const nowKey = Math.floor(S.time / 5) + ":" + S.day + ":" + G.span + ":" + G.start + ":" + G.follow;
+    const nowKey = Math.floor(S.time / 30) + ":" + S.events.length + ":" + S.trains.length + ":" + S.day + ":" + G.span + ":" + G.start + ":" + G.follow;
     if (!force && G.last === nowKey && cv.width === Math.round(cv.clientWidth * (window.devicePixelRatio || 1))) return;
     G.last = nowKey;
     const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
     if (!W) return;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const css = getComputedStyle(document.body);
+    const css = getComputedStyle(cv);
     const col = (v) => css.getPropertyValue(v).trim();
     c.fillStyle = col("--panel"); c.fillRect(0, 0, W, H);
     const L = W < 500 ? 66 : 110, R = 10, top = 22, bot = H - 24;
@@ -1153,7 +1176,7 @@
     // now
     if (S.time >= t0 && S.time <= t1) { c.strokeStyle = "#ff2b2b"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(S.time), top - 10); c.lineTo(X(S.time), bot); c.stroke(); }
     c.restore();
-    $("graphDay").textContent = "· доба " + S.day + " · " + E.fmt(t0).slice(0, 5) + "–" + E.fmt(Math.min(t1, 86399)).slice(0, 5);
+    setT($("graphDay"), String("· доба " + S.day + " · " + E.fmt(t0).slice(0, 5) + "–" + E.fmt(Math.min(t1, 86399)).slice(0, 5)));
   }
   $("gSpan").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; G.span = +b.dataset.h; [...$("gSpan").children].forEach((x) => x.classList.toggle("on", x === b)); if (G.span === 24) { G.follow = false; G.start = 0; $("gNow").classList.remove("on"); } drawGraph(true); });
   $("gBack").onclick = () => { G.follow = false; $("gNow").classList.remove("on"); G.start = Math.max(0, G.start - G.span * 1800); drawGraph(true); };
@@ -1197,7 +1220,7 @@
   function renderCursors() {
     let g = svg.querySelector("g.cursors");
     if (!g) g = el("g", { class: "cursors" }, svg);
-    else svg.appendChild(g);
+    else if (svg.lastChild !== g) svg.appendChild(g);
     const cs = (ctx.cursors && ctx.cursors()) || [];
     const html = cs.filter((c) => c.view === ctx.st).map((c) => {
       const x = c.x, y = sy(c.y), col = c.color;
@@ -1208,7 +1231,25 @@
     if (g.__h !== html) { g.innerHTML = html; g.__h = html; }
   }
 
-  function refresh(full) { renderLineStrip(); renderClock(); renderScheme(); renderIndicators(); renderEvents(full); renderNext(); renderTrain(); renderRku(); renderLog(full); drawGraph(full); renderCursors(); }
+  // panels outside the screen (the timetable, the log, the chart below the diagram on a phone) are not
+  // redrawn until they are scrolled into view
+  const VIS = { graph: true, evTable: true, log: true };
+  if (window.IntersectionObserver) {
+    const io = new IntersectionObserver((es) => es.forEach((en) => {
+      const k = en.target.dataset.vis, was = VIS[k]; VIS[k] = en.isIntersecting;
+      if (VIS[k] && !was) { if (k === "graph") drawGraph(true); else if (k === "evTable") renderEvents(); else renderLog(); }
+    }), { rootMargin: "200px" });
+    [["graph", $("graph")], ["evTable", $("evTable")], ["log", $("log").closest("table")]].forEach(([k, n]) => { if (n) { n.dataset.vis = k; io.observe(n); } });
+    offs.push(() => io.disconnect());
+  }
+  function refresh(full) {
+    renderLineStrip(); renderClock(); renderScheme(); renderIndicators();
+    if (full || VIS.evTable) renderEvents(full);
+    renderNext(); renderTrain(); renderRku();
+    if (full || VIS.log) renderLog(full);
+    if (full || VIS.graph) drawGraph(full);
+    renderCursors();
+  }
 
   // ---------- controls ----------
   function setRunning(r) { ui.running = KEEP.running = r; $("btnPlay").textContent = r ? "⏸ Пауза" : "▶ Пуск"; $("btnPlay").classList.toggle("on", r); }
@@ -1265,7 +1306,7 @@
   }));
   document.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { sim.toggleFault(b.dataset.f); refresh(); }));
   function setTheme(t) {
-    document.body.classList.toggle("grey-console", t === "grey");
+    document.body.classList.toggle("grey-console", t === "grey"); document.documentElement.classList.toggle("grey-console", t === "grey");
     [...$("themeSeg").children].forEach((x) => x.classList.toggle("on", x.dataset.t === t));
     try { localStorage.setItem("dsp-theme", t); } catch (e) { /* storage unavailable */ }
     drawGraph(true);
@@ -1347,7 +1388,10 @@
   $("histList").innerHTML = window.HISTORY_NOTES.map((n) => `<div class="hist-item"><span class="pill ${lvl[n.level][0]}">${lvl[n.level][1]}</span><h3>${esc(n.title)}</h3><p>${esc(n.text)}</p>${n.links.map(([t, u]) => `<div><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a></div>`).join("")}</div>`).join("");
 
   // ---------- loop (fixed 1-second simulation steps) ----------
-  let acc = 0, last = performance.now(), lastRender = 0;
+  let acc = 0, last = performance.now(), lastRender = 0, lastFull = 0;
+  // any input may change what the panels show: the next frame redraws them
+  const markDirty = () => { ui.dirty = true; };
+  ["pointerdown", "pointerup", "keydown", "change", "input", "wheel"].forEach((t) => { document.addEventListener(t, markDirty, true); offs.push(() => document.removeEventListener(t, markDirty, true)); });
   function frame(now) {
     if (!alive) return;
     // a player shows the host's clock state
@@ -1365,7 +1409,12 @@
       if (sim.S.accident) { acc = 0; handleAccident(); }
       else if (sim.S.paused) setRunning(false);
     }
-    if (now - lastRender > 120) { lastRender = now; refresh(); radio.tick(); }
+    // redraw only when the model moved on or the user did something (a paused station costs nothing)
+    if (now - lastRender > 120) {
+      const key = sim.S.time + ":" + sim.S.day + ":" + sim.S.log.length + ":" + (ctx.cursors ? JSON.stringify((ctx.cursors() || []).map((c) => [c.x, c.y])) : "");
+      if (key !== ui.frameKey || ui.dirty || now - lastFull > 2000) { ui.frameKey = key; ui.dirty = false; lastFull = now; refresh(); }
+      lastRender = now; radio.tick();
+    }
     requestAnimationFrame(frame);
   }
   // zoom: scale of the diagram (plan units → px; 0 = fit the window). A big station is wider than
@@ -1407,6 +1456,16 @@
     wrap.addEventListener("click", (e) => { if (wrap.__dragged) { e.stopPropagation(); e.preventDefault(); wrap.__dragged = false; } }, true);
   })();
   applyZoom();
+  // open a big station on its working part: the middle of its tracks is in the middle of the window
+  function centerView() {
+    const wrap = $("schemeWrap"), k = svg.clientWidth / BOX[2];
+    if (!k || (wrap.scrollWidth <= wrap.clientWidth + 2 && wrap.scrollHeight <= wrap.clientHeight + 2)) return;
+    const xs = Object.values(T.nodes).map((p) => p[0]).sort((a, b) => a - b), ys = Object.values(T.nodes).map((p) => p[1]).sort((a, b) => a - b);
+    const mx = xs[xs.length >> 1], my = ys[ys.length >> 1], bar = wrap.querySelector(".indbar");
+    wrap.scrollLeft = Math.max(0, (mx - BOX[0]) * k - wrap.clientWidth / 2);
+    wrap.scrollTop = Math.max(0, (sy(my) - VY0) * k + (bar ? bar.offsetHeight : 0) - wrap.clientHeight / 2);
+  }
+  requestAnimationFrame(centerView);
   // drop-down tabs next to «?»: time, settings
   function dropToggle(btn, panel) {
     $(btn).addEventListener("click", (e) => { e.stopPropagation(); const open = $(panel).hidden; document.querySelectorAll(".drop-panel").forEach((p) => (p.hidden = true)); $(panel).hidden = !open; $(btn).setAttribute("aria-expanded", String(open)); });
@@ -1513,6 +1572,7 @@
           },
           onAssign: (m) => mountClient(m.view),
           onDenied: (t) => toast0(t, "err"),
+          onWait: () => { NET.busy = "Запит надіслано — чекаємо, поки ведучий прийме вас у гру…"; renderNet(); },
           onClose: () => { toast0("Зв'язок з ведучим втрачено. Повертаємось до власної ділянки…", "err"); setTimeout(() => location.reload(), 1500); }
         });
         if (c.line !== world.id) throw new Error("ведучий грає іншу ділянку");
@@ -1546,13 +1606,14 @@
         h = `<p class="nb-note">Кожен гравець керує своєю станцією маршруту, решту веде автодиспетчер. Гравців — не більше ${max}${world.L.capacity ? " (" + Object.entries(world.L.capacity).map(([k, v]) => SDATA[k].name + " — до " + v).join(", ") + ")" : ""}.</p>
           <div class="nb-row"><label for="netName">Ваше ім'я</label><input type="text" id="netName" maxlength="24" value="${esc0(NET.name || "")}" placeholder="Гравець"></div>
           <div class="nb-row"><button id="netHost">Створити кімнату</button><button id="netLocal" title="Для перевірки: гравці — інші вкладки цього ж браузера">У вкладках</button></div>
-          <div class="nb-row"><input type="text" id="netCode" maxlength="8" placeholder="Код кімнати" autocomplete="off"><button id="netJoin">Приєднатися</button></div>
-          <p class="nb-note">Зв'язок напряму між браузерами (WebRTC) через безкоштовний сервер PeerJS. Модель рахує той, хто створив кімнату; у інших — його стан і їхні команди.</p>`;
+          <div class="nb-row"><input type="text" id="netCode" maxlength="16" placeholder="ABC234-XYZ789" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="netJoin">Приєднатися</button></div>
+          <p class="nb-note">Зв'язок напряму між браузерами (WebRTC, шифрований). Код кімнати має дві частини: назву кімнати і секретний ключ. Кожного гравця ведучий приймає вручну і може вигнати з гри.</p>`;
       } else if (s.role === "host") {
         const ro = s.roster();
         h = `<div class="nb-row">Код кімнати: <span class="nb-code">${esc0(s.code)}</span></div>
-          <p class="nb-note">Передайте код іншим гравцям${s.local ? " (лише вкладки цього браузера)" : ""}. Гравців ${ro.length} з ${max}.</p>
-          ${ro.map((r) => `<div class="nb-pl"><i class="pl" style="--pc:${r.color}">${esc0(r.name)}${r.host ? " (ведучий)" : ""}</i><span>${r.st ? esc0(SDATA[r.st].name) : "спостерігає: " + esc0(SDATA[r.view] ? SDATA[r.view].name : "—")}</span></div>`).join("")}
+          <p class="nb-note">Передайте код лише тим, з ким граєте${s.local ? " (лише вкладки цього браузера)" : ""}. Гравців ${ro.length} з ${max}.</p>
+          ${[...s.pending.values()].map((q) => `<div class="nb-req"><b>${esc0(q.name)}</b> хоче приєднатися <button data-acc="${esc0(q.id)}">Прийняти</button><button data-rej="${esc0(q.id)}" class="danger">Відхилити</button></div>`).join("")}
+          ${ro.map((r) => `<div class="nb-pl"><i class="pl" style="--pc:${r.color}">${esc0(r.name)}${r.host ? " (ведучий)" : ""}</i><span>${r.st ? esc0(SDATA[r.st].name) : "спостерігає: " + esc0(SDATA[r.view] ? SDATA[r.view].name : "—")}</span>${r.host ? "" : `<button data-kick="${esc0(r.id)}" class="danger" title="Вигнати гравця з кімнати">✕</button>`}</div>`).join("")}
           <div class="nb-row"><button id="netClose" class="danger">Закрити кімнату</button></div>`;
       } else {
         h = `<div class="nb-row">Кімната <span class="nb-code">${esc0(s.code)}</span></div>
@@ -1569,6 +1630,8 @@
       if (b.id === "netHost") hostRoom(false);
       else if (b.id === "netLocal") hostRoom(true);
       else if (b.id === "netJoin") { const code = $("netCode").value.trim(); if (code) joinRoom(code); }
+      else if (b.dataset.acc != null || b.dataset.rej != null) { const q = NET.s && NET.s.pending && NET.s.pending.get(b.dataset.acc != null ? b.dataset.acc : b.dataset.rej); if (q) (b.dataset.acc != null ? q.accept : q.reject)(); renderNet(); }
+      else if (b.dataset.kick != null) { if (NET.s && NET.s.kick) NET.s.kick(b.dataset.kick); renderNet(); }
       else if (b.id === "netClose") { NET.s.close(); NET.s = null; ownCursor(null); renderNet(); }
       else if (b.id === "netLeave") { NET.s.conn.close(); location.reload(); }
     });
@@ -1579,7 +1642,7 @@
     renderNet();
     window.__net = NET;
     // join link: #line=sh&join=CODE
-    const jm = /(?:^|[#&])join=([A-Za-z0-9]+)/.exec(location.hash || "");
+    const jm = /(?:^|[#&])join=([A-Za-z0-9-]+)/.exec(location.hash || "");
     if (jm) joinRoom(jm[1]);
   } else {
     const id = window.STATION_ID || "sokologirne", d = SDATA[id];

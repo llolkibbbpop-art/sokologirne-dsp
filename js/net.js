@@ -15,7 +15,41 @@
   const LOOKS = [{ color: "#ffffff", shape: "arrow" }, { color: "#ffd23f", shape: "cross" }, { color: "#ff6b5e", shape: "diamond" }, { color: "#36e06a", shape: "ring" }, { color: "#c58cff", shape: "square" }, { color: "#5ad8ff", shape: "tri" }];
   const PEER_URLS = ["https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js", "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"];
   const PREFIX = "armdsp-zp-";
-  const rid = (n) => { const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s = ""; for (let i = 0; i < n; i++) s += a[Math.floor(Math.random() * a.length)]; return s; };
+  const ALPH = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  // codes come from the browser's cryptographic generator, not from Math.random
+  const rid = (n) => { const b = new Uint8Array(n); (window.crypto || window.msCrypto).getRandomValues(b); let s = ""; for (let i = 0; i < n; i++) s += ALPH[b[i] & 31]; return s; };
+
+  // ------------------------------------------------------------ security
+  // A room code is ROOM-KEY: ROOM (6 signs) names the room on the public PeerJS server, KEY (6 signs) is a
+  // secret that only travels inside the encrypted WebRTC channel. Together ~60 bits: a room cannot be guessed.
+  // The host also has to accept every player by hand and can send anyone away.
+  const normCode = (code) => String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const splitCode = (code) => { const c = normCode(code), local = c[0] === "L", body = local ? c.slice(1) : c; return { local, room: (local ? "L" : "") + body.slice(0, 6), key: body.slice(6, 12) }; };
+  const showCode = (room, key) => room + "-" + key;
+  const sameKey = (a, b) => { a = String(a || ""); b = String(b || ""); let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0; };
+  // names that would reach Object.prototype through a lookup like S.sw[id]
+  const BAD = (k) => k === "__proto__" || Object.prototype.hasOwnProperty.call(Object.prototype, k);
+  // everything that comes over the network is copied into plain data: limited depth, sizes and lengths,
+  // no prototype keys, and no characters that could open HTML (< > " `), so nothing can be injected into the page
+  function clean(v, lim, depth) {
+    depth = depth || 0;
+    if (v == null) return null;
+    const t = typeof v;
+    if (t === "string") { if (BAD(v)) throw new Error("bad"); return v.slice(0, lim.str).replace(/[<>"`]/g, (c) => ({ "<": "‹", ">": "›", '"': "″", "`": "ʼ" }[c])); }
+    if (t === "number") return Number.isFinite(v) ? v : 0;
+    if (t === "boolean") return v;
+    if (t !== "object" || depth >= lim.depth) return null;
+    if (Array.isArray(v)) { if (v.length > lim.arr) throw new Error("too long"); return v.map((x) => clean(x, lim, depth + 1)); }
+    const o = {}, ks = Object.keys(v);
+    if (ks.length > lim.keys) throw new Error("too many keys");
+    ks.forEach((k) => { if (BAD(k)) throw new Error("bad key"); o[k] = clean(v[k], lim, depth + 1); });
+    return o;
+  }
+  const FROM_PLAYER = { str: 200, arr: 12, keys: 16, depth: 4 };
+  const FROM_HOST = { str: 4000, arr: 50000, keys: 5000, depth: 18 };
+  const safe = (m, lim) => { try { return clean(m, lim); } catch (e) { return null; } };
+  // per connection: at most ~25 messages a second (a burst of 50); a flood closes the connection
+  function bucket(rate, burst) { let tokens = burst, last = Date.now(), over = 0; return () => { const now = Date.now(); tokens = Math.min(burst, tokens + ((now - last) / 1000) * rate); last = now; if (tokens >= 1) { tokens -= 1; return true; } over++; return over < 300 ? false : null; }; }
 
   // ------------------------------------------------------------ transports
   function loadPeer() {
@@ -91,7 +125,8 @@
   // ------------------------------------------------------------ host
   // world: the LineWorld; hooks: {name(), view(), onChange()}
   async function host(world, local, hooks) {
-    const H = { role: "host", local, code: (local ? "L" : "") + rid(5), players: new Map(), cursors: {}, me: { id: "host", ...LOOKS[0] }, world };
+    const room = (local ? "L" : "") + rid(6), key = rid(6);
+    const H = { role: "host", local, code: showCode(room, key), players: new Map(), pending: new Map(), banned: new Set(), cursors: {}, me: { id: "host", ...LOOKS[0] }, world };
     world.others = new Map();
     const count = (st) => (st === world.player ? 1 : 0) + [...H.players.values()].filter((p) => p.st === st).length;
     const cap = (st) => (world.L.capacity && world.L.capacity[st]) || 1;
@@ -105,43 +140,75 @@
     };
     // a station nobody works any more goes back to the automatic dispatcher
     const release = (st) => { if (st && count(st) === 0) world.sims[st].S.auto = true; };
+    // a command's arguments: short plain values only; a test train may be described by a small flat object
+    const okArgs = (name, a) => Array.isArray(a) && a.length <= 6 && a.every((x) => x == null || ["string", "number", "boolean"].includes(typeof x) ||
+      (name === "addTestTrain" && typeof x === "object" && !Array.isArray(x) && Object.values(x).every((y) => y == null || ["string", "number", "boolean"].includes(typeof y))));
     function onConn(c) {
-      let p = null;
-      c.onData((m) => {
-        if (!m || !m.t) return;
+      let p = null, asked = false;
+      const limit = bucket(25, 50);
+      if (H.banned.has(c.id)) { c.send({ t: "full", text: "Ведучий не пускає вас у цю кімнату." }); setTimeout(() => c.close(), 300); return; }
+      c.onData((m0) => {
+        const ok = limit();
+        if (ok === null) { H.banned.add(c.id); c.close(); return; }
+        if (!ok) return;
+        const m = safe(m0, FROM_PLAYER);
+        if (!m || typeof m.t !== "string") return;
         if (m.t === "hello") {
+          if (p || asked) return;
+          // the secret part of the code, compared in constant time
+          if (!sameKey(m.key, key)) { c.send({ t: "full", text: "Невірний код кімнати." }); setTimeout(() => c.close(), 300); return; }
+          asked = true;
+          const name = String(m.name || "Гравець").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/\s+/g, " ").trim().slice(0, 24) || "Гравець";
+          // the host decides: a request waits in the panel for one minute
+          const req = { id: c.id, name, at: Date.now() };
+          const done = (yes) => { if (!H.pending.has(req.id)) return; H.pending.delete(req.id); hooks.onChange && hooks.onChange(); if (yes) admit(name); else { c.send({ t: "full", text: "Ведучий відхилив запит." }); setTimeout(() => c.close(), 300); } };
+          req.accept = () => done(true); req.reject = () => done(false);
+          H.pending.set(req.id, req); c.send({ t: "wait" }); hooks.onChange && hooks.onChange();
+          setTimeout(() => done(false), 60000);
+          return;
+        }
+        if (!p) return;
+        handle(m);
+      });
+      function admit(name) {
           const maxP = world.L.stations.reduce((n, s2) => n + cap(s2), 0);
           if (H.players.size + 1 >= maxP) { c.send({ t: "full", text: "У кімнаті вже " + maxP + " гравців — більше станції не приймають." }); setTimeout(() => c.close(), 300); return; }
           const st = world.L.stations.find((s2) => count(s2) === 0) || world.L.stations.find(free);
           if (!st) { c.send({ t: "full", text: "Вільних станцій немає." }); setTimeout(() => c.close(), 300); return; }
           const used = new Set([...H.players.values()].map((x) => x.color));
           const look = LOOKS.slice(1).find((l) => !used.has(l.color)) || LOOKS[1];
-          p = { id: c.id + ":" + rid(3), name: String(m.name || "Гравець").slice(0, 24), st, view: st, conn: c, color: look.color, shape: look.shape, logFrom: 0, sRef: null, evStr: null };
+          p = { id: c.id + ":" + rid(3), name, st, view: st, conn: c, color: look.color, shape: look.shape, logFrom: 0, sRef: null, evStr: null };
           H.players.set(p.id, p); world.sims[st].S.auto = false; sync();
           c.send({ t: "welcome", line: world.id, st, seed: world.seed, level: world.level, me: { id: p.id, color: p.color, shape: p.shape } });
           world.sims[st].log("sys", "До ст. приєднався гравець " + p.name);
-          return;
-        }
-        if (!p) return;
+      }
+      function handle(m) {
         if (m.t === "cmd") {
           let r;
-          if (m.st !== p.st || p.view !== p.st) r = { ok: false, err: "Ви не керуєте цією станцією" };
-          else if (m.m === "__auto") { const v = m.a[0] === "trains" ? "trains" : !!m.a[0]; world.sims[p.st].S.auto = v; world.sims[p.st].log("cmd", "Автодиспетчер: " + (v === "trains" ? "лише поїзди, маневри — ДСП" : v ? "усе" : "вимкнено") + " (гравець " + p.name + ")"); r = { ok: true }; }
-          else if (MUT.includes(m.m)) { try { r = world.sims[p.st][m.m](...(m.a || [])); } catch (e) { r = { ok: false, err: String(e.message || e) }; } }
-          c.send({ t: "res", id: m.id, r: r && typeof r === "object" ? { ok: r.ok, err: r.err } : r });
+          const args = Array.isArray(m.a) ? m.a : [];
+          if (!p.st || m.st !== p.st || p.view !== p.st) r = { ok: false, err: "Ви не керуєте цією станцією" };
+          else if (!okArgs(m.m, args)) r = { ok: false, err: "Невірні параметри команди" };
+          else if (m.m === "__auto") { const v = args[0] === "trains" ? "trains" : !!args[0]; world.sims[p.st].S.auto = v; world.sims[p.st].log("cmd", "Автодиспетчер: " + (v === "trains" ? "лише поїзди, маневри — ДСП" : v ? "усе" : "вимкнено") + " (гравець " + p.name + ")"); r = { ok: true }; }
+          else if (m.m === "log") { if (args[0] === "cmd" && typeof args[1] === "string") world.sims[p.st].log("cmd", args[1].slice(0, 160) + " (гравець " + p.name + ")"); r = { ok: true }; }
+          else if (typeof m.m === "string" && MUT.includes(m.m)) { try { r = world.sims[p.st][m.m](...args); } catch (e) { r = { ok: false, err: "команду не виконано" }; } }
+          else r = { ok: false, err: "Невідома команда" };
+          c.send({ t: "res", id: typeof m.id === "number" ? m.id : 0, r: r && typeof r === "object" ? { ok: !!r.ok, err: r.err ? String(r.err).slice(0, 200) : undefined } : r });
         } else if (m.t === "switch") {
           const st = m.st;
+          if (!world.L.stations.includes(st)) return;
           const was = p.st;
           if (m.watch) { p.st = null; p.view = st; release(was); }
           else if (!free(st)) { c.send({ t: "denied", text: "Станцію вже зайнято" }); return; }
           else { p.st = st; p.view = st; world.sims[st].S.auto = false; release(was); }
           p.sRef = null; sync();
           c.send({ t: "assign", st: p.st, view: p.view });
-        } else if (m.t === "cur") { H.cursors[p.id] = { x: m.x, y: m.y, view: p.view, at: Date.now() }; }
-      });
-      c.onClose(() => { if (!p) return; H.players.delete(p.id); delete H.cursors[p.id]; if (p.st) { release(p.st); world.sims[p.st].log("sys", "Гравець " + p.name + " вийшов" + (count(p.st) ? "" : " — станцію веде автодиспетчер")); } sync(); });
+        } else if (m.t === "cur") { if (typeof m.x === "number" && typeof m.y === "number") H.cursors[p.id] = { x: Math.max(-1000, Math.min(10000, m.x)), y: Math.max(-1000, Math.min(10000, m.y)), view: p.view, at: Date.now() }; }
+      }
+      c.onClose(() => { if (H.pending.delete(c.id)) hooks.onChange && hooks.onChange(); if (!p) return; H.players.delete(p.id); delete H.cursors[p.id]; if (p.st) { release(p.st); world.sims[p.st].log("sys", "Гравець " + p.name + " вийшов" + (count(p.st) ? "" : " — станцію веде автодиспетчер")); } sync(); });
     }
-    H.transport = await (local ? localHost(H.code, onConn) : peerHost(H.code, onConn));
+    H.transport = await (local ? localHost(room, onConn) : peerHost(room, onConn));
+    // send a player away: the connection is closed and this browser may not come back into the room
+    H.kick = (pid) => { const p = H.players.get(pid); if (!p) return; H.banned.add(p.conn.id); p.conn.send({ t: "full", text: "Ведучий завершив вашу участь у грі." }); setTimeout(() => p.conn.close(), 200); };
     // state to every player, ~4 times a second
     H.timer = setInterval(() => {
       const ro = roster(), curs = {};
@@ -159,21 +226,28 @@
       });
     }, 250);
     H.cursor = (x, y, view) => { H.me.cur = { x, y, view, at: Date.now() }; };
-    H.close = () => { clearInterval(H.timer); H.players.forEach((p) => p.conn.close()); H.transport.close(); world.others = new Map(); world.L.stations.forEach((st) => { if (st !== world.player) world.sims[st].S.auto = true; }); };
+    H.close = () => { clearInterval(H.timer); H.pending.forEach((r) => r.reject()); H.players.forEach((p) => p.conn.close()); H.transport.close(); world.others = new Map(); world.L.stations.forEach((st) => { if (st !== world.player) world.sims[st].S.auto = true; }); };
     return H;
   }
 
   // ------------------------------------------------------------ player (client)
   async function join(code, name, hooks) {
-    code = String(code || "").trim().toUpperCase();
-    const local = code[0] === "L";
-    const c = await (local ? localJoin(code) : peerJoin(code));
-    const C = { role: "client", code, conn: c, pending: {}, seq: 0, roster: [], cursors: {}, transit: [], info: {}, clock: { running: true, speed: 1 } };
+    const { local, room, key } = splitCode(code);
+    if (room.length < (local ? 7 : 6) || key.length < 6) throw new Error("код кімнати має вигляд ABC234-XYZ789");
+    const c = await (local ? localJoin(room) : peerJoin(room));
+    const C = { role: "client", code: showCode(room, key), conn: c, pending: {}, seq: 0, roster: [], cursors: {}, transit: [], info: {}, clock: { running: true, speed: 1 } };
+    const colorOk = (x) => (LOOKS.some((l) => l.color === x) ? x : "#ffffff"), shapeOk = (x) => (LOOKS.some((l) => l.shape === x) ? x : "arrow");
     return new Promise((ok, bad) => {
-      const t = setTimeout(() => bad(new Error("ведучий не відповів")), 8000);
-      c.onData((m) => {
-        if (!m || !m.t) return;
-        if (m.t === "full") { clearTimeout(t); bad(new Error(m.text)); c.close(); return; }
+      let t = setTimeout(() => bad(new Error("ведучий не відповів")), 8000);
+      c.onData((m0) => {
+        const m = safe(m0, FROM_HOST);
+        if (!m || typeof m.t !== "string") return;
+        // what the host sends is shown on the page: colours and shapes only from our own list
+        if (m.me) { m.me.color = colorOk(m.me.color); m.me.shape = shapeOk(m.me.shape); }
+        (Array.isArray(m.roster) ? m.roster : []).forEach((r) => { if (r) { r.color = colorOk(r.color); r.shape = shapeOk(r.shape); r.name = String(r.name || "").slice(0, 24); } });
+        if (m.cursors && typeof m.cursors === "object") Object.values(m.cursors).forEach((q) => { if (q) { q.x = +q.x || 0; q.y = +q.y || 0; } });
+        if (m.t === "wait") { clearTimeout(t); hooks.onWait && hooks.onWait(); t = setTimeout(() => bad(new Error("ведучий не відповів на запит")), 70000); return; }
+        if (m.t === "full") { clearTimeout(t); bad(new Error(m.text)); hooks.onKicked && hooks.onKicked(m.text); c.close(); return; }
         if (m.t === "welcome") { clearTimeout(t); Object.assign(C, { line: m.line, st: m.st, view: m.st, me: m.me, seed: m.seed, level: m.level }); ok(C); return; }
         if (m.t === "state") { C.roster = m.roster; C.cursors = m.cursors; C.transit = m.transit; C.info = m.info; C.clock = m.clock; C.st = m.st; hooks.onState && hooks.onState(m); return; }
         if (m.t === "res") { const f = C.pending[m.id]; delete C.pending[m.id]; if (f) f(m.r); return; }
@@ -181,7 +255,7 @@
         if (m.t === "denied") { hooks.onDenied && hooks.onDenied(m.text); }
       });
       c.onClose(() => { hooks.onClose && hooks.onClose(); });
-      c.send({ t: "hello", name });
+      c.send({ t: "hello", name: String(name || "").slice(0, 24), key });
     });
   }
   // a station model whose commands go to the host
@@ -204,5 +278,5 @@
     } });
   }
 
-  window.Net = { host, join, remoteSim, readonlySim, LOOKS, MUT };
+  window.Net = { host, join, remoteSim, readonlySim, LOOKS, MUT, splitCode };
 })();

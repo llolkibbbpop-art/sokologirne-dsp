@@ -381,7 +381,8 @@ body.console-only #viewHist { display: none !important; }
    v9: square АРМ look, header across the full width, Excel-like sheets,
    classic grey confirmation window, analog clock
    ===================================================================== */
-*, *::before, *::after { border-radius: 0 !important; }
+/* square АРМ look inside the console screen (the Windows-style chrome around it has its own rounding) */
+.scheme-wrap *, .indbar *, .gwrap * { border-radius: 0 !important; }
 
 .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px 18px; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; min-width: 0; }
@@ -528,7 +529,7 @@ table.sheet button:hover { background: #cfcfcf; border-color: #444; }
 .logt tr.lg-auto td { color: #555; }
 .logt tr.lg-sys td { color: #333; font-style: italic; }
 @media (max-width: 720px) { .logt th:nth-child(1), .logt td:nth-child(1) { display: none; } }
-html:has(body.grey-console) { background: #585858; }
+html.grey-console { background: #585858; }
 .logt tr.lg-warn td { color: #000; background: #fff4c7; }
 .logt tr.lg-delay td { color: #9a4a00; }
 .sheet tr.ev.cfg td { color: #6d6d6d; font-style: italic; }
@@ -661,3 +662,215 @@ body.picking .swz:hover { stroke: none; }
 button.lamp-box { cursor: pointer; }
 #indPlace:not(.on) { background: transparent; }
 .blk-body textarea[readonly] { background: #e8e8e8; }
+
+/* ---- performance: repaints of one panel do not spread over the whole page ---- */
+#schemeWrap { contain: paint; }
+.graph-card, .cols .card { contain: content; }
+.gwrap canvas { will-change: contents; }
+
+/* =====================================================================
+   v12 · Windows 7-style window around the АРМ screen
+   The console itself (diagram, indicator strip, chart) stays black and square, as on the real АРМ;
+   everything around it is drawn as a Windows 7 application window: glass title bar, command bar,
+   gradient buttons, group boxes, list views, Aero dialog windows. Original CSS, no system images.
+   Mobile first: on a phone the window has no frame and the diagram comes right after the title.
+   ===================================================================== */
+:root {
+  --w7-face: #f0f0f0; --w7-text: #000; --w7-muted: #4c607a; --w7-border: #707070; --w7-group: #d5dfe5; --w7-blue: #1e395b;
+  --w7-glass: linear-gradient(180deg, #e3eefa 0%, #cfe0f3 48%, #bed3ec 52%, #cadcf0 100%);
+  --w7-btn: linear-gradient(180deg, #f2f2f2 0%, #ebebeb 49%, #dddddd 50%, #cfcfcf 100%);
+  --w7-btn-hot: linear-gradient(180deg, #eaf6fd 0%, #d9f0fc 49%, #bee6fd 50%, #a7d9f5 100%);
+  --w7-btn-down: linear-gradient(180deg, #e5f4fc 0%, #c4e5f6 49%, #98d1ef 50%, #68b3db 100%);
+  --w7-sel: linear-gradient(180deg, #f1f8fd 0%, #d5effc 100%);
+  /* chrome tokens used by the older rules */
+  --bg: #2a5d8f; --panel: #ffffff; --panel-2: #f4f7fb; --line: #c6d3e0; --fg: #111; --muted: #4c607a; --accent: #1f6fc4; --hist: #1e395b; --cfg: #6b2fb3; --warn: #a65a00; --occ: #c00000; --route: #1d7a35;
+  color-scheme: light;
+}
+/* the black console screens keep the АРМ palette */
+.scheme-wrap, .gwrap, .rku-card .il, .line-strip .ls-gap .tr { --panel: #0f0f0f; --panel-2: #1b1b1b; --line: #3d3d3d; --fg: #f2f2f2; --muted: #a9a9a9; --accent: #ffffff; --warn: #ffb23e; --occ: #ff4a3d; --route: #3ecf6b; color-scheme: dark; }
+
+html { background: #1d4f80 linear-gradient(160deg, #3b7cbc 0%, #1f5a94 45%, #123c69 100%) fixed; min-height: 100%; }
+html.grey-console { background: #585858; }
+body { color: var(--w7-text); background: var(--w7-face); max-width: 1920px; margin: 10px auto 18px; padding: 0 0 10px;
+  border: 1px solid #1b2f48; border-radius: 7px 7px 4px 4px; box-shadow: 0 0 0 5px rgba(205,224,245,.55), 0 14px 40px rgba(0,0,0,.45); overflow: clip; width: calc(100% - 28px); }
+body > section, body > .banner, body > .tabs, body > footer { margin-inline: 10px; }
+
+/* ---- title bar (glass) with the command bar under it ---- */
+.top { position: relative; background: var(--w7-glass); border-bottom: 1px solid #8ea6c4; padding: 6px 10px 0; gap: 4px 14px; grid-template-columns: auto minmax(0, 1fr) auto; }
+.top::after { content: ""; position: absolute; inset: 0 0 auto; height: 50%; background: linear-gradient(rgba(255,255,255,.55), rgba(255,255,255,.08)); pointer-events: none; }
+.brand { position: relative; z-index: 1; padding-bottom: 6px; }
+.brand h1 { font-size: 16px; letter-spacing: .02em; text-transform: none; color: #000; text-shadow: 0 0 8px #fff, 0 0 2px #fff; display: flex; align-items: center; gap: 8px; }
+.brand h1::before { content: ""; width: 18px; height: 18px; flex: none; background:
+  linear-gradient(#000, #000) 3px 8px / 12px 2px no-repeat, radial-gradient(circle at 50% 50%, #ff3b30 0 3px, transparent 3.5px) 0 0 / 9px 9px no-repeat,
+  radial-gradient(circle at 50% 50%, #33e06d 0 3px, transparent 3.5px) 9px 9px / 9px 9px no-repeat, #fff; border: 1px solid #555; border-radius: 3px; }
+.brand small { color: #1e395b; text-shadow: 0 0 6px #fff; }
+.toolbar { position: relative; z-index: 1; gap: 2px; padding-bottom: 6px; }
+.toolbar > button, .drop > button { height: 30px; background: transparent; border: 1px solid transparent; border-radius: 3px; color: #000; padding: 3px 9px; box-shadow: none; }
+.toolbar > button:hover, .drop > button:hover, .drop > button[aria-expanded="true"] { background: var(--w7-btn-hot); border-color: #3c7fb1; box-shadow: inset 0 0 0 1px rgba(255,255,255,.7); }
+.toolbar > button:active, .drop > button:active { background: var(--w7-btn-down); border-color: #2c628b; }
+.help-btn { width: 30px; color: #fff; border-radius: 50% !important; background: radial-gradient(circle at 35% 30%, #8cc4ff, #1f6fc4 70%) !important; border-color: #174f8c !important; font-weight: 700; }
+#btnRadio b { color: #c00000; }
+#btnRadio.alert { border-color: #c00000; }
+
+/* ---- buttons, fields ---- */
+button, select, input, textarea { color: #000; font: inherit; }
+button { background: var(--w7-btn); border: 1px solid var(--w7-border); border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.75); padding: 4px 11px; }
+button:hover { background: var(--w7-btn-hot); border-color: #3c7fb1; }
+button:active, button.on { background: var(--w7-btn-down); border-color: #2c628b; }
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px dotted #000; outline-offset: -4px; box-shadow: 0 0 0 1px #3399ff, inset 0 0 0 1px rgba(255,255,255,.75); }
+button.danger { color: #8a0000; }
+button:disabled, button:disabled:hover { background: #f4f4f4; border-color: #adb2b5; color: #838383; box-shadow: none; opacity: 1; }
+select, input[type=text], input[type=number], input:not([type]), textarea { background: #fff; border: 1px solid #abadb3; border-top-color: #8e8f8f; border-radius: 2px; padding: 3px 6px; }
+select:hover, input:hover, textarea:hover { border-color: #7eb4ea; }
+.seg button { border-radius: 0; }
+.seg button:first-child { border-radius: 3px 0 0 3px; }
+.seg button:last-child { border-radius: 0 3px 3px 0; }
+
+/* ---- drop-down menus (Windows 7 menu) ---- */
+.drop-panel { background: #f0f0f0; color: #000; border: 1px solid #979797; border-radius: 0; box-shadow: 3px 3px 4px rgba(0,0,0,.28); padding: 8px 10px; }
+.drop-panel label, .dp-cap { color: #000; }
+.dp-note, .st-list button span, .st-list .st-note, .st-list .st-cap { color: #4c607a; }
+.dp-col { border-left-color: #d5dfe5; }
+.st-list button { background: transparent; border: 1px solid transparent; box-shadow: none; }
+.st-list button:hover { background: var(--w7-sel); border-color: #b8d6fb; }
+.st-list button.on { background: linear-gradient(#dcebfc, #c1dbfc); border-color: #7da2ce; }
+
+/* ---- clock: a small gadget in the title bar ---- */
+.clockbox { position: relative; z-index: 1; align-self: center; margin-bottom: 6px; background: linear-gradient(#3a3a3a, #0b0b0b); border: 1px solid #000; border-radius: 4px; box-shadow: inset 0 1px rgba(255,255,255,.35), 0 1px 3px rgba(0,0,0,.4); }
+
+/* ---- info bar, tabs ---- */
+.banner { margin-top: 8px; border: 1px solid #c8b56c; border-radius: 0; background: #ffffe1; color: #000; padding: 5px 10px 5px 30px; position: relative; }
+.banner::before { content: "i"; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; border-radius: 50%; background: #1f6fc4; color: #fff; font: 700 12px/15px var(--font-ui); text-align: center; }
+.tabs { gap: 0; margin: 8px 10px 0; border-bottom: 1px solid #898c95; padding-left: 4px; }
+.tabs button { border-radius: 3px 3px 0 0; border-bottom: 0; margin-right: -1px; padding: 4px 14px; background: linear-gradient(#f2f2f2, #dadada); box-shadow: none; position: relative; top: 1px; }
+.tabs button.on { background: #fff; border-color: #898c95; z-index: 1; padding-block: 6px 5px; margin-top: -2px; }
+
+/* ---- the route strip as an address bar ---- */
+.line-strip { border: 1px solid #7a9ac0; border-radius: 2px; background: linear-gradient(#fdfeff, #eef3fa); margin-top: 8px; }
+.line-strip .ls-st { color: #000; border-right: 1px solid #c3d1e3; }
+.line-strip .ls-st:hover { background: var(--w7-sel); }
+.line-strip .ls-st span, .line-strip .ls-gap, .line-strip .ls-end { color: #4c607a; }
+.line-strip .ls-st.me { background: linear-gradient(#dcebfc, #c1dbfc); color: #000; }
+.line-strip .ls-st.other { outline-color: #1f6fc4; }
+.line-strip .ls-gap, .line-strip .ls-end { border-right-color: #c3d1e3; }
+.line-strip .ls-gap .tr { color: #000; }
+
+/* ---- the console screen sits in a sunken frame ---- */
+.scheme-wrap { margin-top: 8px; border: 1px solid #000; outline: 1px solid #a0a0a0; outline-offset: 0; box-shadow: inset 0 0 0 1px #262626; }
+.toast { position: sticky; left: 0; background: linear-gradient(#f1f5fb, #dfe7f1); color: #000; border: 1px solid #a0afc3; border-top: 0; padding: 3px 10px; min-height: 24px; }
+.toast.err { color: #c00000; }
+.toast.ok { color: #1d6b31; }
+
+/* ---- group boxes ---- */
+.card { background: #fff; color: #000; border: 1px solid var(--w7-group); border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.card h2 { color: var(--w7-blue); text-transform: none; letter-spacing: .02em; border-bottom: 1px solid #e3eaf1; padding-bottom: 5px; }
+.hint, .glegend { color: #4c607a; }
+.glegend i { border-top-color: #4c607a; }
+.glegend i.lf { border-top-color: #000; }
+.gwrap { background: #0f0f0f; border: 1px solid #000; }
+.advice { background: #f4f7fb; border-left-color: #1f6fc4; color: #000; }
+.advice ul.goals li.g-ok { color: #1d7a35; }
+.adv-note, .late { color: #c00000; }
+.pill { border-color: #b9c6d3; background: #fff; }
+.p-active { color: #1d6b31; border-color: #1d7a35; }
+.p-waiting, .p-delayed { color: #000; background: #ffd78a; border-color: #d29b2f; }
+
+/* ---- list views (timetable, log, journals) ---- */
+.tbl-wrap.sheet, .radio-live, .radio-journal { border: 1px solid #828790; background: #fff; }
+.sheet th, table.sheet th { background: linear-gradient(#ffffff, #f1f2f4); color: #4c607a; font-weight: 400; border: 0; border-right: 1px solid #e3e5e8; border-bottom: 1px solid #d5d5d5; }
+.sheet td, table.sheet td { border: 0; border-bottom: 1px solid #f0f0f0; }
+.sheet tr.ev:hover td { background: #e5f3fb; }
+.sheet tr.ev.sel td, .sheet tr.ev.sel.act td, .sheet tr.ev.sel.wait td { background: #cce8ff; }
+.filters button.on { font-weight: 400; }
+
+/* ---- windows: object panel, train card, dialogs, radio ---- */
+.rku-card, .info-pop { padding: 0 0 10px; border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(190,211,236,.85), 0 10px 26px rgba(0,0,0,.4); background: var(--w7-face); }
+.rku-card h2 { margin: 0; padding: 6px 8px 6px 12px; background: var(--w7-glass); border-bottom: 1px solid #8ea6c4; border-radius: 5px 5px 0 0; color: #000; text-shadow: 0 0 6px #fff; display: flex; align-items: center; justify-content: space-between; }
+.rku-card > div { padding: 8px 12px 0; }
+.sheet-close, .win-title button, #radioClose, #accClose { min-width: 40px; height: 20px; padding: 0 8px; line-height: 18px; color: #fff; font-weight: 700; border: 1px solid #5c1b10; border-radius: 3px;
+  background: linear-gradient(180deg, #e8a493 0%, #d36d55 49%, #c2401f 50%, #d0603f 100%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); text-shadow: 0 0 2px #000; }
+.sheet-close:hover, .win-title button:hover, #radioClose:hover, #accClose:hover { background: linear-gradient(180deg, #f2b8a9 0%, #e7826a 49%, #d84d2b 50%, #ea7350 100%); }
+.modal-bg { background: rgba(10,30,60,.35); }
+.modal { background: var(--w7-face); color: #000; border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(190,211,236,.85), 0 12px 34px rgba(0,0,0,.45); }
+.modal.win, .blk-win { padding: 0; background: var(--w7-face); border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(190,211,236,.85), 0 12px 34px rgba(0,0,0,.45); }
+.win-title, .blk-title, .radio-head { background: var(--w7-glass); color: #000; text-shadow: 0 0 6px #fff; border-bottom: 1px solid #8ea6c4; border-radius: 5px 5px 0 0; padding: 5px 6px 5px 10px; font-weight: 400; }
+.blk-title { text-align: left; }
+.win-title .hint, .radio-head .hint { color: #1e395b; }
+.m-btns button, .blk-btns button { min-width: 88px; background: var(--w7-btn); border: 1px solid var(--w7-border); border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.75); padding: 4px 12px; }
+.m-btns button:hover, .blk-btns button:hover { background: var(--w7-btn-hot); border-color: #3c7fb1; }
+.m-btns button:active, .blk-btns button:active { background: var(--w7-btn-down); border-color: #2c628b; }
+.m-code input { border: 1px solid #abadb3; border-radius: 2px; }
+.blk-btns { background: #f0f0f0; border-top: 1px solid #dfdfdf; }
+.blk-body textarea { background: #fff; border: 1px solid #abadb3; }
+.radio-win { background: var(--w7-face); color: #000; border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(190,211,236,.85), 0 12px 34px rgba(0,0,0,.45); }
+.ctx-menu { background: #f0f0f0; border: 1px solid #979797; box-shadow: 3px 3px 4px rgba(0,0,0,.28); }
+.ctx-menu button { background: transparent; box-shadow: none; border: 1px solid transparent; }
+.ctx-menu button:hover { background: var(--w7-sel); border-color: #b8d6fb; }
+.accident { background: #fff; color: #000; border: 1px solid #1b2f48; border-radius: 6px; box-shadow: 0 0 0 4px rgba(236,190,190,.9), 0 10px 28px rgba(0,0,0,.45); }
+.accident b { color: #c00000; }
+.modal.help h4 { color: var(--w7-blue); }
+.net-panel .nb-code { border-color: #000; background: #fff; }
+.net-panel .nb-err { color: #c00000; }
+.hist-item a { color: #0066cc; }
+footer { color: #4c607a; margin: 12px 10px 0; }
+
+/* ---- the console screen keeps its own white-on-black controls ---- */
+.indbar button, .indbar .seg button, .indbar .il { box-shadow: none; }
+.indbar .seg button { background: transparent; border: 1.5px solid #f2f2f2; color: #f2f2f2; }
+.indbar .seg button:hover { background: #2a2a2a; }
+.indbar .il.btn, .indbar .il.btn:hover, .indbar .il.btn:active { background: none; border: 0; color: #ededed; }
+.indbar .lamp-box { box-shadow: none; }
+.indbar .lamp-box:not(.on) { background: transparent; color: #f2f2f2; border-color: #f2f2f2; }
+.indbar .lamp-box.on { background: #29c43f; color: #08260d; border-color: #f2f2f2; }
+
+/* grey console variant: the screen turns grey, the window stays light */
+body.grey-console { --bg: #2a5d8f; --panel: #fff; --panel-2: #f4f7fb; --line: #c6d3e0; --fg: #111; --muted: #4c607a; --accent: #1f6fc4; }
+body.grey-console .scheme-wrap, body.grey-console .gwrap { --panel: #686868; --panel-2: #767676; --line: #9c9c9c; --fg: #fff; --muted: #ececec; }
+body.grey-console .banner { color: #000; border-color: #c8b56c; }
+body.grey-console .clockbox { background: linear-gradient(#5a5a5a, #3a3a3a); }
+
+/* ---- phones and narrow windows: no frame, the diagram right after a compact title ---- */
+@media (max-width: 720px) {
+  html { background: var(--w7-face); }
+  body { width: 100%; margin: 0; border: 0; border-radius: 0; box-shadow: none; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body > section, body > .banner, body > .tabs, body > footer { margin-inline: 6px; }
+  .top { grid-template-columns: minmax(0, 1fr) auto; padding: calc(4px + env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px)); gap: 2px 8px; }
+  .brand { padding-bottom: 2px; min-width: 0; }
+  .brand h1 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .brand h1::before { display: none; }
+  .clockbox { margin: 0; padding: 2px 6px 2px 3px; }
+  #aclock { width: 30px; height: 30px; }
+  .clk-text small { display: none; }
+  /* the command bar is one row that scrolls sideways instead of four rows of buttons */
+  .toolbar { grid-column: 1 / -1; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; justify-content: flex-start; padding: 2px 0 4px; margin: 0 -8px; padding-inline: 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .toolbar::-webkit-scrollbar { display: none; }
+  .toolbar > button, .drop > button { height: 36px; white-space: nowrap; flex: none; }
+  .drop { flex: none; }
+  .drop-panel, .drop-panel.right { position: fixed; left: 6px; right: 6px; top: auto; max-height: 70vh; overflow-y: auto; }
+  .banner { font-size: 16px; line-height: 1.2; padding: 4px 8px 4px 28px; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .tabs { margin: 6px 6px 0; }
+  .line-strip { margin-top: 6px; }
+  .line-strip .ls-st, .line-strip .ls-gap { min-width: 0; padding: 4px 8px; }
+  .scheme-wrap { margin-top: 6px; }
+  /* the indicator strip: one row that scrolls sideways, the plan stays on the first screen */
+  .indbar { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; gap: 6px 16px; padding: 6px 8px 4px; scrollbar-width: thin; }
+  .indbar .igrp { flex: none; }
+  .il i { width: 28px; height: 8px; }
+  .cols { margin-top: 8px; }
+  .rku-card.open, .info-pop.open { border-radius: 8px 8px 0 0; box-shadow: 0 -6px 22px rgba(0,0,0,.35); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .rku-card.open h2 { border-radius: 7px 7px 0 0; }
+  button { min-height: 34px; }
+  .indbar button, .seg button, .sheet button, .ls-st { min-height: 0; }
+}
+@media (max-width: 720px) and (orientation: landscape) {
+  .banner, .tabs { display: none; }
+}
+/* phones: the diagram is a window of its own that scrolls both ways; the indicator strip stays on top */
+@media (max-width: 720px) {
+  .scheme-wrap { max-height: calc(100svh - 150px); min-height: 260px; overflow: auto; overscroll-behavior: contain; }
+  .indbar { position: sticky; top: 0; left: 0; z-index: 2; background: var(--sch-bg); width: 100%; }
+  .banner { max-height: 2.6em; }
+}
+@media (min-width: 721px) { .indbar { gap: 8px 12px; } .indbar .igcap, .il .ilc { letter-spacing: 0; } }
+.net-panel .nb-req { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; margin: 6px 0; background: #ffffe1; border: 1px solid #c8b56c; }
+.net-panel .nb-pl button { margin-left: auto; min-width: 0; min-height: 0; padding: 0 7px; }
