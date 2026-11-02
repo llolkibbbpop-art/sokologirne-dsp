@@ -66,7 +66,7 @@
   // ---------- diagram ----------
   const svg = $("scheme");
   const edgeEls = [], swEls = {}, sigEls = {}, endEls = {};
-  let trainLayer, pickLayer, gXO, gXI;
+  let trainLayer, pickLayer, setLayer, gXO, gXI, gSq;
   // every drawn piece of a switch leg (including bends up to the next joint), and ALL switches it depends on:
   // a crossover piece belongs to two switches and is "in use" only when both point to it
   const swLegEdge = {};
@@ -121,7 +121,7 @@
     (V.notes || []).forEach(([x, y, t]) => note(x, y, t));
     (V.borders || []).forEach(([x1, y1, x2, y2]) => el("line", { x1, y1: sy(y1), x2, y2: sy(y2), class: "border" }, svg));
     // Draw order: inactive switch legs (dim) at the bottom, sloped branches, then straight tracks on top.
-    gXO = el("g", {}, svg); gXI = el("g", {}, svg);
+    gSq = el("g", {}, svg); gXO = el("g", {}, svg); gXI = el("g", {}, svg);
     const gSO = el("g", {}, svg), gSI = el("g", {}, svg), gO = el("g", {}, svg), gI = el("g", {}, svg), gHit = el("g", {}, svg);
     edgeEls.length = 0;
     // join pieces of one section that meet at a plain bend into one polyline (no notches at the corners)
@@ -180,6 +180,10 @@
       const hit = el("path", { d, class: "hit" }, gHit);
       el("title", {}, hit).textContent = (D.sections[sec].label || "Стрілочна секція") + " · " + sec;
       hit.addEventListener("click", (ev) => onObjectClick({ kind: "sec", id: sec }, ev));
+      ctxOn(hit, { kind: "sec", id: sec });
+      // pointer over a section: its contour turns blue (p.157)
+      hit.addEventListener("pointerenter", () => { ui.hoverSec = sec; renderScheme(); });
+      hit.addEventListener("pointerleave", () => { if (ui.hoverSec === sec) { ui.hoverSec = null; renderScheme(); } });
       edgeEls.push({ o, i, sec, leg, home: [sloped ? gSO : gO, sloped ? gSI : gI], off: false });
     });
     // dead ends: a white buffer stop across the end of a station track
@@ -190,6 +194,19 @@
       const P = edgePts(n, m), [x0, y0] = P[0], [x1, y1] = P[1], L = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / L, uy = (y1 - y0) / L;
       const ang = (Math.atan2(uy, ux) * 180) / Math.PI;
       el("rect", { x: -3, y: -9, width: 6, height: 18, class: "bufstop", transform: `translate(${(x0 - ux * 2).toFixed(1)},${(y0 - uy * 2).toFixed(1)}) rotate(${ang.toFixed(1)})` }, svg);
+    }));
+    // two sensitivity zones per switch (fig. 2.61): the start of the plus and of the minus branch.
+    // The pointer over a zone shows a yellow frame; a left click asks to move the switch there (p.162)
+    svg.appendChild(gSq);
+    const gZ = el("g", { class: "swzones" }, svg);
+    T.switches.forEach((s) => [["+", s.plus], ["-", s.minus]].forEach(([leg, n]) => {
+      const P = edgePts(s.node, n), [ax, ay] = P[0], [bx, by] = P[1], L0 = Math.hypot(bx - ax, by - ay) || 1;
+      const ux = (bx - ax) / L0, uy = (by - ay) / L0, nx = -uy, ny = ux, a0 = 4, a1 = Math.max(10, Math.min(38, L0 * 0.45)), w = 8;
+      const q = [[a0, w], [a1, w], [a1, -w], [a0, -w]].map(([d, o]) => (ax + ux * d + nx * o).toFixed(1) + "," + (ay + uy * d + ny * o).toFixed(1)).join(" ");
+      const z = el("polygon", { points: q, class: "swz" }, gZ);
+      el("title", {}, z).textContent = "Стрілка " + s.id + " — " + (leg === "+" ? "плюсове" : "мінусове") + " положення";
+      z.addEventListener("click", (ev) => onZoneClick(s.id, leg, ev));
+      ctxOn(z, { kind: "sw", id: s.id });
     }));
     T.labels.forEach(([t, x, y]) => (el("text", { x, y: sy(y + 6) - 12, class: "trk-label" }, svg).textContent = t));
     (V.blockLabels || []).forEach(([t, x, y, dy]) => (el("text", { x, y: sy(y) + dy, class: "blk-label" }, svg).textContent = t));
@@ -205,15 +222,24 @@
       const away = sloped ? -Math.sign(sloped[0] - x) : 1;
       const tx = sloped ? x + away * 14 : x;
       el("rect", { x: tx - 13, y: below ? y + 7 : y - 26, width: 26, height: 20, class: "sw-hit" }, g);
-      // blocked: red underlay under the number (handbook p.190); position locked: padlock beside it
+      // table 2.16: position locked — a padlock beside the number; switch blocked — a red square under the
+      // switch picture; the switch handle on the panel not in the middle — «С» in a yellow circle
       const t = el("text", { x: tx, y: ty, "text-anchor": "middle", class: "sw-label" }, g); t.textContent = s.id;
-      // position locked: a dashed frame around the number; blocked: a padlock beside it
-      const lk = el("rect", { x: tx - (s.id.length > 2 ? 15 : 11), y: ty - 13, width: s.id.length > 2 ? 30 : 22, height: 18, class: "sw-lockf" }, g);
       const half = (s.id.length > 2 ? 15 : s.id.length > 1 ? 11 : 8) + 2;
-      const bl = padlock(g, away > 0 ? tx + half : tx - half - 13.2, ty - 14, 1.1);
+      const lk = padlock(g, away > 0 ? tx + half : tx - half - 13.2, ty - 14, 1.1);
+      const hd = el("g", { class: "sw-handle" }, g);
+      const hx = away > 0 ? tx - half - 7 : tx + half + 7;
+      el("circle", { cx: hx, cy: ty - 5, r: 7.5 }, hd); el("text", { x: hx, y: ty, "text-anchor": "middle" }, hd).textContent = "С";
+      // the red square sits in the fork between the plus and the minus branch
+      const pq = edgePts(s.node, s.plus)[1], mq = edgePts(s.node, s.minus)[1];
+      const pL = Math.hypot(pq[0] - x, pq[1] - y) || 1, mL = Math.hypot(mq[0] - x, mq[1] - y) || 1;
+      const bx = (pq[0] - x) / pL + (mq[0] - x) / mL, by = (pq[1] - y) / pL + (mq[1] - y) / mL, bL = Math.hypot(bx, by) || 1;
+      const cx = x + bx / bL * 17, cy = y + by / bL * 17;
+      const sq = el("rect", { x: (cx - 6).toFixed(1), y: (cy - 5).toFixed(1), width: 12, height: 10, class: "sw-blk" }, gSq);
       el("title", {}, g).textContent = "Стрілка " + s.id;
       g.addEventListener("click", (ev) => onObjectClick({ kind: "sw", id: s.id }, ev));
-      swEls[s.id] = { t, lk, bl, g };
+      ctxOn(g, { kind: "sw", id: s.id });
+      swEls[s.id] = { t, lk, hd, sq, g };
     });
     // non-signal objects from the plan (С30)
     (T.markers || []).forEach((m) => {
@@ -250,8 +276,10 @@
       const t = el("text", { x: dir > 0 ? x - 4 : x + 4, y: yy + 4, "text-anchor": dir > 0 ? "end" : "start" }, g); t.textContent = s.id;
       el("title", {}, g).textContent = "Світлофор " + s.id + (s.note ? " — " + s.note : "");
       g.addEventListener("click", (ev) => onObjectClick({ kind: "sig", id: s.id }, ev));
+      ctxOn(g, { kind: "sig", id: s.id });
       sigEls[s.id] = { g, lamp, inv, blk };
     });
+    setLayer = el("g", { class: "pick" }, svg);
     pickLayer = el("g", { class: "pick" }, svg);
     trainLayer = el("g", {}, svg);
     renderScheme();
@@ -280,6 +308,8 @@
         if (rs && rs.state === "cancelling") cls.push("blink");
       }
       if (st.blocked) cls.push("blocked");
+      if (st.dresina) cls.push("dresina");
+      if (st.noInfo) cls.push("noinfo");
       if (st.artUntil != null) cls.push("blink");
       if (pickEnds && pickEnds.secs.has(e.sec)) cls.push("target");
       let off = false;
@@ -287,6 +317,7 @@
       // the leg the switch does not point to shows nothing: no route colour, no occupancy
       if (off) { cls.length = 0; cls.push("off"); if (e.leg.some((l) => S.sw[l.sw].lost)) cls.push("lost"); }
       if (ui.sel && ui.sel.kind === "sec" && ui.sel.id === e.sec) cls.push("sel");
+      if (ui.hoverSec === e.sec && !off) cls.push("hover");
       const c = cls.join(" ");
       if (e.c !== c) { e.o.setAttribute("class", "tube-o " + c); e.i.setAttribute("class", "tube-i " + c); e.c = c; }
       if (e.off !== off) { (off ? gXO : e.home[0]).appendChild(e.o); (off ? gXI : e.home[1]).appendChild(e.i); e.off = off; }
@@ -295,7 +326,8 @@
       const st = S.sw[id];
       e.t.setAttribute("class", "sw-label" + (st.pos === "-" ? " minus" : "") + (st.moving ? " moving" : "") + (st.lost ? " lost" : "") + (ui.sel && ui.sel.kind === "sw" && ui.sel.id === id ? " sel" : ""));
       e.lk.style.display = st.lockedInd ? "" : "none";
-      e.bl.style.display = st.blocked ? "" : "none";
+      e.hd.style.display = st.handle ? "" : "none";
+      e.sq.style.display = st.blocked ? "" : "none";
     }
     for (const [id, e] of Object.entries(sigEls)) {
       const sg = D.signals[id], st = S.sig[id];
@@ -309,6 +341,16 @@
     }
     for (const [id, e] of Object.entries(endEls)) e.g.classList.toggle("target", !!(pickEnds && pickEnds.ends.has(id)));
     trainLayer.innerHTML = "";
+    // a brake shoe on a track, a fenced track (p.159): a small tag over the section
+    Object.entries(S.sec).forEach(([id, st]) => {
+      const tags = [st.shoe && "БАШМАК", st.fence && "ОГОРОДЖ."].filter(Boolean);
+      if (!tags.length) return;
+      const [x, y] = secMid(id), lab = tags.join(" · "), bw = 10 + lab.length * 7.4;
+      const g = el("g", { class: "sec-tag", transform: `translate(${(x + 70).toFixed(1)},${(y - 17).toFixed(1)})` }, trainLayer);
+      el("rect", { x: -bw / 2, y: -8, width: bw, height: 15 }, g);
+      el("text", { x: 0, y: 4, "text-anchor": "middle" }, g).textContent = lab;
+    });
+    renderSetLine();
     Object.entries(S.sec).forEach(([id, st]) => {
       if (!st.wagons || st.occ != null) return;
       const [x, y] = secMid(id);
@@ -366,13 +408,13 @@
   }
   function finishPick(endId) {
     const r = routeForEnd(endId);
-    if (!r) { toast("Маршруту від " + ui.pick.from + " до «" + endName(endId) + "» немає. Виберіть підсвічений кінець або Esc — відміна набору.", "err"); return; }
+    if (!r) { pickFail("Маршруту від " + ui.pick.from + " до «" + endName(endId) + "» немає: невірний кінцевий світлофор."); return; }
     const mode = ui.pick.mode, from = ui.pick.from;
     const endObj = D.sections[endId] ? (D.sections[endId].group || endId) : endId;
     confirmCmd(mode === "shunt" ? "ММЗ" : "ПМЗ", endObj, "Задати " + (mode === "shunt" ? "маневровий" : "поїзний") + " маршрут від " + from + " до " + endObj, false, () => {
       const res = sim.setRoute(r.id, null, mode, true);
-      if (res.ok) { stopPick(); toast("Маршрут " + r.id + ": стрілки переводяться, після замикання світлофор відкриється.", "ok"); }
-      else toast("Маршрут " + r.id + " не встановлено: " + res.err + ". Виберіть інший кінець або Esc.", "err");
+      if (res.ok) { const to = endPoint(endId); stopPick(); if (to) ui.setLine = { rid: r.id, from, to, mode }; renderScheme(); toast("Маршрут " + r.id + ": стрілки переводяться, після замикання світлофор відкриється.", "ok"); }
+      else pickFail("Маршрут " + r.id + " не може бути встановлений: " + res.err + ".");
       return res;
     });
   }
@@ -390,14 +432,61 @@
     const q = p.matrixTransform(m.inverse());
     const g = sigGeom(D.signals[ui.pick.from]);
     pickLayer.innerHTML = "";
-    el("line", { x1: g.lx, y1: g.yy, x2: q.x, y2: q.y, class: "pick-line " + ui.pick.mode }, pickLayer);
-    el("text", { x: q.x + 6, y: q.y - 6, class: "pick-x " + ui.pick.mode }, pickLayer).textContent = "✕";
+    if (!$("pickDlg").hidden) return;
+    pickLayer.innerHTML = "";
+    drawRouteLine(pickLayer, g.lx, g.yy, q.x, q.y, ui.pick.mode);
   });
+  // the route line: a straight line from the start signal, the end marked with a cross (pp. 160–161)
+  function drawRouteLine(layer, x1, y1, x2, y2, mode) {
+    el("line", { x1, y1, x2, y2, class: "pick-line " + mode }, layer);
+    const c = 6;
+    el("path", { d: `M${x2 - c},${y2 - c} L${x2 + c},${y2 + c} M${x2 - c},${y2 + c} L${x2 + c},${y2 - c}`, class: "pick-xx " + mode }, layer);
+  }
+  function endPoint(endId) {
+    if (D.signals[endId]) { const g = sigGeom(D.signals[endId]); return [g.lx, g.yy]; }
+    if (endEls[endId]) return [endEls[endId].x, endEls[endId].y];
+    const sec = D.sections[endId] ? endId : Object.keys(D.sections).find((k) => D.sections[k].group === endId);
+    return sec ? secMid(sec) : null;
+  }
+  function renderSetLine() {
+    if (!setLayer) return;
+    const L = ui.setLine, st = L && sim.S.routes[L.rid];
+    if (!L || !st || st.state !== "setting") { if (L || setLayer.firstChild) { ui.setLine = null; setLayer.innerHTML = ""; } return; }
+    if (setLayer.firstChild) return;
+    const g = sigGeom(D.signals[L.from]);
+    drawRouteLine(setLayer, g.lx, g.yy, L.to[0], L.to[1], L.mode);
+  }
+  // «Маршрут не може бути встановлений»: the line stays; «Відміна набору» or «Продовжити» (p.161)
+  function pickFail(msg) {
+    $("pickText").textContent = msg;
+    $("pickDlg").hidden = false; $("pickGoOn").focus();
+  }
+  $("pickCancelSet").onclick = () => { $("pickDlg").hidden = true; if (ui.pick) stopPick("Набір маршруту відмінено."); };
+  $("pickGoOn").onclick = () => { $("pickDlg").hidden = true; if (ui.pick) toast("Виберіть правильний кінцевий світлофор.", "ok"); };
   svg.addEventListener("click", (ev) => {
     if (ui.pick && ev.target === svg) toast("Виберіть кінцевий світлофор або колію. Esc — відміна набору.");
     else if (!ui.pick && ev.target === svg) select(null);
   });
 
+  // right button on an object — its context menu (pp. 156–159); during route setting it does nothing
+  function ctxOn(node, o) {
+    node.addEventListener("contextmenu", (ev) => { ev.preventDefault(); ev.stopPropagation(); hideCtx(); if (!ui.pick) select(o, ev); });
+  }
+  $("indPlace").onclick = () => {
+    if (RO) return;
+    const toPanel = sim.S.place !== "panel";
+    confirmCmd("МУ", "Місце управління", toPanel ? "Передати керування на пульт (АРМ лише показує стан)" : "Прийняти керування на АРМ ДСП", true, () => sim.setPlace(toPanel ? "panel" : "arm"));
+  };
+  // the place of control (table 2.21): with «Пульт» the АРМ only shows the state of the station
+  const panelCtl = () => { if (sim.S.place !== "panel") return false; toast("Місце управління — «Пульт»: команди з АРМ ДСП не виконуються.", "err"); return true; };
+  function onZoneClick(id, leg, ev) {
+    ev.stopPropagation();
+    if (ui.pick) return finishPick(D.switches[id].section);
+    if (RO || panelCtl()) return;
+    const st = sim.S.sw[id];
+    if (st.pos === leg && !st.moving) { toast("Стрілка " + id + " уже в " + (leg === "+" ? "плюсовому" : "мінусовому") + " положенні.", "ok"); return; }
+    confirmCmd(leg === "+" ? "СП+" : "СП−", "Стрілка " + id, "Перевести стрілку в " + (leg === "+" ? "плюсове" : "мінусове") + " положення", false, () => sim.moveSwitch(id, leg), null, { ok: "Перевести", cancel: "Скасування" });
+  }
   function onObjectClick(o, ev) {
     if (ev) ev.stopPropagation();
     if (ui.pick) {
@@ -420,6 +509,7 @@
     $("indFuse").classList.toggle("lit", S.faults.fuse); $("indSlow").classList.toggle("lit", S.faults.slow); $("indKv").classList.toggle("lit", S.faults.kv);
     $("indIR").classList.toggle("lit", Object.values(S.sec).some((s) => s.artUntil != null));
     $("indCut").classList.toggle("lit", Object.values(S.sw).some((s) => s.lost));
+    $("indPlace").textContent = S.place === "panel" ? "ПУЛЬТ" : "АРМ ДСП";
     $("indAuto").textContent = S.auto === "trains" ? "МАНЕВРИ" : S.auto ? "АВТО" : "РУЧНЕ";
     $("indAuto").classList.toggle("on", !!S.auto);
     const ld = S.lastDir, any = Object.values(S.routes).length > 0;
@@ -471,11 +561,11 @@
       const busyRid = rs && rs.state !== "used" ? rid : null;
       const hasTrain = sim.routesFrom(s.id, "train").length, hasShunt = sim.routesFrom(s.id, "shunt").length;
       h += `<dl class="kv"><dt>Світлофор</dt><dd><b>${esc(s.id)}</b> · ${kindName}</dd><dt>Показання</dt><dd>${st.open ? (st.aspect === "white" ? "білий — маневри дозволено" : "зелений — поїзд прийняти/відправити") : sg.kind === "shunt" ? "синій — маневри заборонено" : "червоний — заборонено"}${st.inv ? " + запрошувальний" : ""}${st.blocked ? " · ЗАБЛОКОВАНО" : ""}</dd>
-        ${rid ? `<dt>Маршрут</dt><dd>${esc(rid)} — ${routeStateName[rs.state] || rs.state}</dd>` : ""}${sg.note ? `<dt>Примітка</dt><dd>${esc(sg.note)}</dd>` : ""}</dl><div class="menu">`;
+        ${rid ? `<dt>Маршрут</dt><dd>${esc(rid)} — ${routeStateName[rs.state] || rs.state}</dd>` : ""}${st.blocked ? `<dt>Причина</dt><dd>${esc(st.reason || "не вказано")}</dd>` : ""}${sg.note ? `<dt>Примітка</dt><dd>${esc(sg.note)}</dd>` : ""}</dl><div class="menu">`;
       if (hasTrain) h += B("pick", "train", "Встановити поїзний маршрут", { dis: !!busyRid || st.blocked });
       if (hasShunt) h += B("pick", "shunt", "Встановити маневровий маршрут", { dis: !!busyRid || st.blocked });
       if (rid && rs.state !== "used") h += B("cancel", rid, rs.mode === "shunt" ? "Відмінити маневровий маршрут" : "Відмінити поїзний маршрут", { danger: true, dis: rs.state === "cancelling" });
-      if (rid && rs.state === "set") h += B("open", s.id, "Повторно відкрити світлофор");
+      if (rid && rs.state === "set") h += B("open", s.id, rs.mode === "shunt" ? "Повторно відкрити маневровий світлофор" : "Повторно відкрити поїзний світлофор");
       if (st.open) h += B("close", s.id, "Закрити світлофор");
       if (sg.kind === "entry" || sg.kind === "exit") h += B("inv", s.id, st.inv ? "Запрошувальний горить" : "Запрошувальний сигнал", { danger: true, dis: !!st.inv || st.open });
       h += B("sigblock", s.id, st.blocked ? "Розблокувати" : "Заблокувати");
@@ -483,23 +573,37 @@
     } else if (s.kind === "sw") {
       const st = S.sw[s.id], sw = D.switches[s.id], sec = S.sec[sw.section];
       h += `<dl class="kv"><dt>Стрілка</dt><dd><b>${esc(s.id)}</b> · секція ${esc(sw.section)}</dd><dt>Контроль</dt><dd>${st.lost ? "<b class='late'>немає контролю (розріз)</b>" : st.moving ? "переводиться…" : st.pos === "+" ? "плюсовий" : "мінусовий"}</dd>
-        <dt>Замикання</dt><dd>${sec.lock ? "у маршруті " + esc(sec.lock) : st.lockedInd ? "положення заблоковано" : "ні"}</dd>${st.blocked ? "<dt>Стан</dt><dd>заблокована</dd>" : ""}${sec.falseOcc ? "<dt>Секція</dt><dd class='late'>показує зайнятість</dd>" : ""}</dl><div class="menu">`;
-      h += B("sw+", s.id, "Перевести в плюс", { dis: st.pos === "+" && !st.moving });
-      h += B("sw-", s.id, "Перевести в мінус", { dis: st.pos === "-" && !st.moving });
-      if (sec.falseOcc) h += B("aux", s.id, "Допоміжне переведення", { danger: true });
-      h += B("swlock", s.id, st.lockedInd ? "Розблокувати положення" : "Заблокувати положення");
-      h += B("swblock", s.id, st.blocked ? "Розблокувати стрілку" : "Заблокувати стрілку");
-      h += `</div><details class="train-faults"><summary>Навчання: несправності</summary><div class="menu">${B("swfault", s.id, st.lost ? "Відновити контроль (електромеханік)" : "Ввести втрату контролю")}</div></details>`;
+        <dt>Замикання</dt><dd>${sec.lock ? "у маршруті " + esc(sec.lock) : st.lockedInd ? "положення заблоковано" : "ні"}</dd>${st.blocked ? `<dt>Стан</dt><dd>заблокована · ${esc(st.reason || "причину не вказано")}</dd>` : ""}${st.handle ? "<dt>Рукоятка</dt><dd class='late'>на пульті не в середньому положенні (С)</dd>" : ""}${sec.falseOcc ? "<dt>Секція</dt><dd class='late'>показує зайнятість</dd>" : ""}</dl><div class="menu">`;
+      // table 2.17: a blocked switch has only «Розблокувати» in its menu
+      if (st.blocked) h += B("swblock", s.id, "Розблокувати");
+      else {
+        h += B("sw+", s.id, "Перевести в плюс", { dis: st.pos === "+" && !st.moving });
+        h += B("sw-", s.id, "Перевести в мінус", { dis: st.pos === "-" && !st.moving });
+        if (sec.falseOcc) h += B("aux", s.id, "Допоміжне переведення", { danger: true });
+        h += B("swlock", s.id, st.lockedInd ? "Розблокувати положення" : "Заблокувати положення");
+        h += B("swblock", s.id, "Заблокувати");
+      }
+      h += `</div><p class="hint">Переведення: клацніть лівою кнопкою початок плюсового або мінусового відгалуження стрілки на схемі.</p><details class="train-faults"><summary>Навчання: несправності</summary><div class="menu">${B("swfault", s.id, st.lost ? "Відновити контроль (електромеханік)" : "Ввести втрату контролю")}${B("handle", s.id, st.handle ? "Рукоятку на пульті — в середнє положення" : "Рукоятка на пульті не в середньому (С)")}</div></details>`;
     } else if (s.kind === "sec") {
       const st = S.sec[s.id], info = D.sections[s.id];
       const occ = st.occ != null ? S.trains.find((t) => t.id === st.occ) : null;
       h += `<dl class="kv"><dt>Ділянка</dt><dd><b>${esc(s.id)}</b> · ${esc(info.label || "стрілочна секція")}</dd><dt>Зайнятість</dt><dd>${occ ? "зайнята: " + esc(occ.num) : st.falseOcc ? "<b class='late'>показує зайнятість без поїзда</b>" : "вільна"}</dd><dt>Замикання</dt><dd>${st.lock ? "маршрут " + esc(st.lock) : "ні"}${st.artUntil != null ? " · ШР до " + E.fmt(st.artUntil) : ""}</dd></dl><div class="menu">`;
-      h += B("secblock", s.id, st.blocked ? "Розблокувати ділянку" : "Заблокувати ділянку");
-      h += B("art", s.id, "Штучне розмикання", { danger: true, dis: !st.lock });
+      const flags = [st.dresina && "дрезина на колії", st.shoe && "гальмівний башмак", st.fence && "огороджена (згоду надано)", st.noInfo && "немає інформації про стан", st.blocked && "заблокована: " + (st.reason || "причину не вказано")].filter(Boolean);
+      if (flags.length) h = h.replace(/<\/dl><div class="menu">$/, `<dt>Стан</dt><dd>${esc(flags.join("; "))}</dd></dl><div class="menu">`);
+      const plain = info.kind !== "switch";
+      // table 2.20: a blocked section has only «Розблокувати»; a section without switches can get a dresina
+      if (st.blocked) h += B("secblock", s.id, "Розблокувати");
+      else {
+        h += B("secblock", s.id, "Заблокувати");
+        if (plain) h += B("dresina", s.id, st.dresina ? "Зняти дрезину" : "Встановити дрезину");
+        if (info.kind === "track") h += B("shoe", s.id, st.shoe ? "Зняти гальмівний башмак" : "Встановити гальмівний башмак");
+        if (info.kind === "track") h += B("fence", s.id, st.fence ? "Зняти огородження колії" : "Надати згоду на огородження колії");
+        h += B("art", s.id, "Штучне розмикання", { danger: true, dis: !st.lock });
+      }
       if (st.wagons) h = h.replace("</dl>", `<dt>Вагони</dt><dd>${st.wagons.consist ? "состав " + esc(st.wagons.consist) + (st.wagons.ready ? " — готовий до відправлення" : "") : "залишив " + esc(st.wagons.num)} з ${E.fmt(st.wagons.since).slice(0, 5)}</dd></dl>`);
-      if (!occ && !st.lock && !["approach", "exit", "line"].includes(info.kind)) h += B("loco", s.id, "Поставити маневровий локомотив");
+      if (!occ && !st.lock && !st.blocked && !["approach", "exit", "line"].includes(info.kind)) h += B("loco", s.id, "Поставити маневровий локомотив");
       if (occ && occ.loco) h += B("locodel", String(occ.id), "Прибрати локомотив");
-      h += `</div><details class="train-faults"><summary>Навчання: несправності</summary><div class="menu">${B("secfault", s.id, st.falseOcc ? "Усунути хибну зайнятість" : "Ввести хибну зайнятість")}</div></details>`;
+      h += `</div><details class="train-faults"><summary>Навчання: несправності</summary><div class="menu">${B("secfault", s.id, st.falseOcc ? "Усунути хибну зайнятість" : "Ввести хибну зайнятість")}${B("noinfo", s.id, st.noInfo ? "Відновити інформацію про стан" : "Втрата інформації про стан")}</div></details>`;
     } else if (s.kind === "marker") {
       const m = (T.markers || []).find((x) => x.id === s.id);
       h += `<dl class="kv"><dt>Об'єкт</dt><dd><b>${esc(m.id)}</b></dd></dl><p class="hint">${esc(m.note)}</p>`;
@@ -517,6 +621,7 @@
   $("rku").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-c]"); if (!b || b.disabled) return;
     const c = b.dataset.c, a = b.dataset.a;
+    if (!["pickend", "pickcancel"].includes(c) && !/fault$/.test(c) && c !== "noinfo" && c !== "handle" && panelCtl()) return;
     if (c === "pick") { startPick(ui.sel.id, a); return; }
     if (c === "pickend") { finishPick(a); return; }
     if (c === "pickcancel") { stopPick("Набір маршруту відмінено."); return; }
@@ -538,21 +643,27 @@
       art: ["ШР", a, "Штучне розмикання ділянки (витримка " + Math.round(P.artReleaseSec / 60) + " хв)", true, () => sim.artRelease(a)],
       secfault: ["НС", a, S.sec[a] && S.sec[a].falseOcc ? "Усунути хибну зайнятість" : "Навчання: ввести хибну зайнятість ділянки", false, () => sim.setFault("sec", a, !S.sec[a].falseOcc)],
       loco: ["ЛК", a, "Поставити маневровий локомотив", false, () => sim.spawnLoco(a)],
+      dresina: ["ДРЗ", a, S.sec[a] && S.sec[a].dresina ? "Зняти дрезину" : "Встановити дрезину на колію", false, () => sim.toggleSecFlag(a, "dresina")],
+      shoe: ["БШ", a, S.sec[a] && S.sec[a].shoe ? "Зняти гальмівний башмак" : "Встановити гальмівний башмак", false, () => sim.toggleSecFlag(a, "shoe")],
+      fence: ["ОГР", a, S.sec[a] && S.sec[a].fence ? "Зняти огородження колії" : "Надати згоду на огородження колії", true, () => sim.toggleSecFlag(a, "fence")],
+      noinfo: ["НС", a, S.sec[a] && S.sec[a].noInfo ? "Відновити інформацію про стан секції" : "Навчання: втрата інформації про стан секції", false, () => sim.setFault("noinfo", a, !S.sec[a].noInfo)],
+      handle: ["НС", "Стрілка " + a, S.sw[a] && S.sw[a].handle ? "Повернути рукоятку стрілки на пульті в середнє положення" : "Навчання: рукоятка стрілки на пульті не в середньому положенні", false, () => sim.setFault("handle", a, !S.sw[a].handle)],
       locodel: ["ЛК", "Локомотив", "Прибрати маневровий локомотив", false, () => sim.removeLoco(+a)]
     };
     const [mn, obj, desc, resp, fn] = map[c];
     // blocking asks for a reason (it goes to the log); unblocking is an ordinary command
     const blockFns = { swblock: [S.sw[a], "стрілки " + a, (why) => sim.toggleSwitchBlock(a, why)], sigblock: [S.sig[a], "світлофора " + a, (why) => sim.toggleSignalBlock(a, why)],
       secblock: [S.sec[a], "ділянки " + a, (why) => sim.toggleSectionBlock(a, why)] };
-    if (blockFns[c] && blockFns[c][0] && !blockFns[c][0].blocked) { askBlockReason(blockFns[c][1], blockFns[c][2]); return; }
+    if (blockFns[c] && blockFns[c][0]) { const o = blockFns[c][0]; askBlockReason(blockFns[c][1], blockFns[c][2], o.blocked ? { reason: o.reason } : null); return; }
     confirmCmd(mn, obj, desc, resp, fn);
   });
 
   let pending = null;
   // dialog as in the АРМ: «Підтвердіть виконання (відповідальної) команди»
-  function confirmCmd(mn, obj, desc, resp, fn, onCancel) {
+  function confirmCmd(mn, obj, desc, resp, fn, onCancel, names) {
     const code = String(100 + Math.floor(rnd() * 900));
     pending = { fn, resp, code, onCancel };
+    $("mOk").textContent = (names && names.ok) || "Виконати"; $("mCancel").textContent = (names && names.cancel) || "Відмінити";
     $("mWinTitle").textContent = resp ? "Підтвердіть виконання відповідальної команди" : "Підтвердіть виконання команди";
     $("mTitle").textContent = obj;
     $("mBody").innerHTML = resp
@@ -564,16 +675,20 @@
   }
   function closeModal() { $("modal").hidden = true; pending = null; }
   let blkFn = null;
-  function askBlockReason(what, fn) {
-    blkFn = fn; $("blkText").textContent = "Вкажіть причину блокування " + what; $("blkReason").value = "";
-    $("blkDlg").hidden = false; $("blkReason").focus();
+  // blocking: type the reason; unblocking: the window shows why the object was blocked (pp. 162–163)
+  function askBlockReason(what, fn, unblock) {
+    blkFn = fn; const ta = $("blkReason");
+    $("blkText").textContent = unblock ? "Причина блокування " + what + ":" : "Вкажіть причину блокування " + what;
+    ta.value = unblock ? unblock.reason || "(причину не вказано)" : ""; ta.readOnly = !!unblock;
+    $("blkOk").textContent = unblock ? "Розблокувати" : "Заблокувати";
+    $("blkDlg").hidden = false; (unblock ? $("blkOk") : ta).focus();
   }
   const closeBlk = () => { $("blkDlg").hidden = true; blkFn = null; };
   $("blkCancel").onclick = () => { closeBlk(); refresh(); };
   $("blkOk").onclick = () => {
     if (!blkFn) return;
-    const r = blkFn($("blkReason").value.trim()); closeBlk();
-    toast(r && r.ok ? "Заблоковано." : "Відмова: " + (r && r.err), r && r.ok ? "ok" : "err");
+    const unb = $("blkReason").readOnly, r = blkFn(unb ? undefined : $("blkReason").value.trim()); closeBlk();
+    toast(r && r.ok ? (unb ? "Розблоковано." : "Заблоковано.") : "Відмова: " + (r && r.err), r && r.ok ? "ok" : "err");
     refresh();
   };
   $("mX").onclick = () => $("mCancel").click();
@@ -586,12 +701,24 @@
     refresh();
   };
   document.addEventListener("keydown", (e) => {
-    if (!$("blkDlg").hidden) { if (e.key === "Escape") $("blkCancel").click(); }
+    if (!$("pickDlg").hidden) { if (e.key === "Escape") $("pickCancelSet").click(); else if (e.key === "Enter") $("pickGoOn").click(); }
+    else if (!$("blkDlg").hidden) { if (e.key === "Escape") $("blkCancel").click(); }
     else if (!$("modal").hidden) { if (e.key === "Escape") $("mCancel").click(); if (e.key === "Enter") $("mOk").click(); }
     else if (!$("help").hidden && e.key === "Escape") $("help").hidden = true;
     else if (ui.pick && e.key === "Escape") stopPick("Набір маршруту відмінено.");
   });
-  svg.addEventListener("contextmenu", (e) => { if (ui.pick) { e.preventDefault(); stopPick("Набір маршруту відмінено."); } });
+  // right button on free space: a menu with «Відміна набору» (p.161)
+  const ctxMenu = document.createElement("div"); ctxMenu.className = "ctx-menu"; ctxMenu.hidden = true;
+  ctxMenu.innerHTML = '<button data-x="cancelset">Відміна набору</button>';
+  document.body.appendChild(ctxMenu);
+  function hideCtx() { ctxMenu.hidden = true; }
+  ctxMenu.addEventListener("click", (e) => { const b = e.target.closest("button"); hideCtx(); if (b && ui.pick) stopPick("Набір маршруту відмінено."); else if (b) toast("Набору маршруту немає."); });
+  svg.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    ctxMenu.style.left = Math.min(e.clientX, window.innerWidth - 190) + "px"; ctxMenu.style.top = Math.min(e.clientY, window.innerHeight - 50) + "px"; ctxMenu.hidden = false;
+  });
+  document.addEventListener("pointerdown", (e) => { if (!ctxMenu.hidden && !ctxMenu.contains(e.target)) hideCtx(); });
+  offs.push(() => ctxMenu.remove());
 
   // approach announcement: a short beep when a train enters the approach section (p.165)
   let actx = null;

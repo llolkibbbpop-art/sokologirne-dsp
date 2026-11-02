@@ -84,7 +84,7 @@
         <button class="il btn red" id="indKv" data-f="kv" title="РЕЗЕРВ. КВ. — з рисунка пульта; у навчальному режимі вмикається кліком. Точне значення в посібнику не описане"><span class="ilc">РЕЗЕРВ. КВ.</span><i></i></button>
         <div class="il red" id="indCut" title="Втрата контролю будь-якої стрілки"><span class="ilc">РОЗРІЗ СТР.</span><i></i></div>
       </div></div>
-      <div class="igrp"><span class="igcap">МІСЦЕ · РЕЖИМ</span><div class="irow"><span class="lamp-box on">АРМ ДСП</span><span class="lamp-box" id="indAuto">РУЧНЕ</span></div></div>
+      <div class="igrp"><span class="igcap">МІСЦЕ УПРАВЛ. · РЕЖИМ</span><div class="irow"><button class="lamp-box on" id="indPlace" title="Місце управління: «АРМ ДСП» або «Пульт». Клацніть, щоб передати керування (з «Пультом» АРМ лише показує стан станції)">АРМ ДСП</button><span class="lamp-box" id="indAuto">РУЧНЕ</span></div></div>
       <div class="igrp"><span class="igcap">ЛІЧИЛЬНИКИ</span><span class="counters" title="Запрошувальний / допоміжне переведення / штучне розмикання">ЗС <b id="cntInv">0</b> · ДП <b id="cntAux">0</b> · ШР <b id="cntArt">0</b></span></div>
 
       <div class="igrp zoom"><span class="igcap">МАСШТАБ</span><span class="seg" id="zoomSeg"><button data-z="-1" aria-label="Зменшити">−</button><button data-z="0" title="Вся станція">▭</button><button data-z="1" aria-label="Збільшити">+</button></span></div>
@@ -554,6 +554,14 @@
       <div id="mBody"></div>
       <div class="m-btns"><button id="mOk">Виконати</button><button id="mCancel">Відмінити</button></div>
     </div>
+  </div>
+</div>
+
+<div id="pickDlg" class="modal-bg" hidden>
+  <div class="blk-win" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
+    <div class="blk-title" id="pickTitle">Маршрут не може бути встановлений</div>
+    <div class="blk-body" id="pickText"></div>
+    <div class="blk-btns"><button id="pickCancelSet">Відміна набору</button><button id="pickGoOn">Продовжити</button></div>
   </div>
 </div>
 

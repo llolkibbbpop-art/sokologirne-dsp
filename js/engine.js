@@ -198,7 +198,7 @@
     function pickLead(sg, sec, trId, needSet) {
       const L = sg.leads[sec] || [];
       const me = S.trains.find((t) => t.id === trId), mine = (rid) => !!(me && me.ridsUsed && me.ridsUsed.includes(rid));
-      return L.find((l) => l.secs.every((s) => { const st = S.sec[s]; return (st.occ == null || st.occ === trId) && !st.wagons && !st.falseOcc && (!st.lock || mine(st.lock)) && !st.blocked; }) &&
+      return L.find((l) => l.secs.every((s) => { const st = S.sec[s]; return (st.occ == null || st.occ === trId) && !st.wagons && !st.falseOcc && (!st.lock || mine(st.lock)) && !st.blocked && !secHold(st); }) &&
         Object.entries(l.sw).every(([id, pos]) => !S.sw[id].lost && !S.sw[id].blocked && (needSet ? S.sw[id].pos === pos && !S.sw[id].moving : S.sw[id].pos === pos || !switchLockedBy(id)))) || null;
     }
     const findConsist = (id) => Object.keys(S.sec).find((k) => S.sec[k].wagons && S.sec[k].wagons.consist === id);
@@ -227,11 +227,12 @@
         shuntingEnabled: o.shuntingEnabled !== undefined ? o.shuntingEnabled : P.shuntingEnabledByDefault,
         sw: {}, sec: {}, sig: {}, routes: {}, pseudo: {}, trains: [], log: [], delays: o.delays || {}, nextTrainId: 1,
         pendingTests: [], kits: { free: null, shunt: null, train: null }, counters: { inv: 0, aux: 0, art: 0 }, lastDir: null,
-        mode: "main", faults: { fuse: false, slow: false, kv: false }, accident: null
+        mode: "main", place: "arm", faults: { fuse: false, slow: false, kv: false }, accident: null
       };
-      Object.keys(D.switches).forEach((id) => (S.sw[id] = { pos: "+", lockedInd: false, blocked: false, moving: null, lost: false }));
-      Object.keys(D.sections).forEach((id) => (S.sec[id] = { occ: null, lock: null, blocked: false, artUntil: null, falseOcc: false, wagons: null }));
-      Object.keys(D.signals).forEach((id) => (S.sig[id] = { open: false, aspect: null, inv: null, blocked: false }));
+      Object.keys(D.switches).forEach((id) => (S.sw[id] = { pos: "+", lockedInd: false, blocked: false, moving: null, lost: false, handle: false, reason: null }));
+      // dresina / shoe / fence / noInfo — handbook pp. 156, 159 (table 2.18, the list of the DSP's actions)
+      Object.keys(D.sections).forEach((id) => (S.sec[id] = { occ: null, lock: null, blocked: false, artUntil: null, falseOcc: false, wagons: null, dresina: false, shoe: false, fence: false, noInfo: false, reason: null }));
+      Object.keys(D.signals).forEach((id) => (S.sig[id] = { open: false, aspect: null, inv: null, blocked: false, reason: null }));
       S.events = buildEvents();
       log("sys", "Початок модельної доби. Режим: " + (S.auto === "trains" ? "поїзди — автодиспетчер, маневри — ДСП" : S.auto ? "автодиспетчер" : "ручне керування"));
       D.problems.forEach((p) => log("warn", "Топологія: " + p));
@@ -239,9 +240,12 @@
 
     // ---------------------------------------------------------------- interlocking checks
     const secBusy = (st) => st.occ != null || st.falseOcc || !!st.wagons;
+    // a section a route may not be set over (besides occupancy and locking): dresina, shoe, fencing, no information
+    const secHold = (st) => (st.noInfo ? "немає інформації про стан" : st.dresina ? "на колії дрезина" : st.fence ? "колію огороджено" : st.shoe ? "на колії гальмівний башмак" : null);
     function switchLockedBy(id) {
       const sw = D.switches[id], sec = S.sec[sw.section];
       if (S.sw[id].lockedInd) return "положення стрілки " + id + " заблоковано";
+      if (S.sw[id].handle) return "рукоятка стрілки " + id + " на пульті не в середньому положенні";
       if (sec.lock) return "стрілка " + id + " замкнена в маршруті " + sec.lock;
       if (sec.occ != null) return "стрілочна секція " + sw.section + " зайнята";
       if (sec.falseOcc) return "стрілочна секція " + sw.section + " показує зайнятість — потрібне допоміжне переведення";
@@ -254,6 +258,8 @@
       if (R.problems.length) return "Маршрут " + rid + " потребує уточнення: " + R.problems.join("; ");
       if (S.routes[rid]) return "Маршрут " + rid + " вже задано";
       if (S.sig[R.from].blocked) return "Світлофор " + R.from + " заблоковано";
+      // a blocked signal cannot be used in a route at all (p.162) — also as a signal along the route
+      for (const t of R.through || []) if (S.sig[t] && S.sig[t].blocked) return "Попутний світлофор " + t + " заблоковано";
       if (Object.values(S.routes).some((r) => r.state === "setting")) return "Йде встановлення іншого маршруту — зачекайте кілька секунд";
       // line mode: the neighbouring station decides whether a single-track line may be taken
       if (opts && opts.lineGate && R.type === "train") { const why = opts.lineGate(R, S); if (why) return why; }
@@ -270,6 +276,7 @@
         if (st.falseOcc) return "Секція " + s + " показує зайнятість (несправність)";
         if (st.lock) return "Секція " + s + " замкнена у ворожому маршруті " + st.lock;
         if (st.blocked) return "Секція " + s + " заблокована ДСП";
+        const hold = secHold(st); if (hold) return "Секція " + s + ": " + hold;
       }
       for (const [id, pos] of Object.entries(R.switches)) {
         const sw = S.sw[id];
@@ -323,6 +330,7 @@
         // a shunting route may end on an occupied track (coupling to wagons or a standing train)
         if (R.type === "shunt" && s === lastSec && D.sections[s].kind === "track" && !S.sec[s].falseOcc && !(S.sec[s].occ != null && isMoving(S.sec[s].occ))) continue;
         if (secBusy(S.sec[s])) { const err = "секція " + s + " зайнята"; log("error", "Відкриття " + sig + ": відмова — " + err); return { ok: false, err }; }
+        const hold = secHold(S.sec[s]); if (hold) { const err = "секція " + s + ": " + hold; log("error", "Відкриття " + sig + ": відмова — " + err); return { ok: false, err }; }
       }
       const mode = S.routes[rid].mode;
       S.routes[rid].state = "open";
@@ -384,7 +392,7 @@
       if (cur.moving) return { ok: false, err: "стрілка вже переводиться" };
       const sec = S.sec[D.switches[id].section];
       if (aux) {
-        if (cur.lockedInd) { const err = "положення стрілки заблоковано"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
+        if (cur.lockedInd || cur.handle) { const err = cur.handle ? "рукоятка стрілки на пульті не в середньому положенні" : "положення стрілки заблоковано"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
         if (sec.lock && S.mode !== "aux") { const err = "стрілка замкнена в маршруті (у режимі ДОПОМІЖ. переведення можливе, але відповідальність — на ДСП)"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
         if (sec.occ != null) { const err = "під стрілкою рухомий склад — фізично неможливо"; log("error", "Допоміжне переведення " + id + ": " + err); return { ok: false, err }; }
         S.counters.aux++;
@@ -403,16 +411,31 @@
       return { ok: true };
     }
     function isMoving(trId) { const t = S.trains.find((x) => x.id === trId); return !!t && !t.done && !t.parked && t.idx < t.seq.length - 1; }
+    // place of control (table 2.21): «АРМ ДСП» or «Пульт» (the panel); with the panel the АРМ only displays
+    function setPlace(p) { S.place = p === "panel" ? "panel" : "arm"; log("cmd", "Місце управління: " + (S.place === "panel" ? "Пульт" : "АРМ ДСП")); return { ok: true }; }
     function setMode(m) { S.mode = m; log("cmd", "Режим управління: " + ({ main: "ОСНОВНИЙ", reserve: "РЕЗЕРВНИЙ", aux: "ДОПОМІЖНИЙ" }[m])); return { ok: true }; }
     function toggleFault(k) { S.faults[k] = !S.faults[k]; log(S.faults[k] ? "warn" : "cmd", ({ fuse: "ПРЕДОХР.", slow: "ЗАМЕДЛ. ПУТ. ПОВТ.", kv: "РЕЗЕРВ. КВ." }[k]) + (S.faults[k] ? ": індикатор увімкнено (навчальна несправність)" : ": норма")); return { ok: true }; }
     function toggleSwitchLock(id) { const s = S.sw[id]; s.lockedInd = !s.lockedInd; log("cmd", "Положення стрілки " + id + (s.lockedInd ? " заблоковано (замок)" : " розблоковано")); return { ok: true }; }
     const why = (r) => (r ? " (причина: " + String(r).slice(0, 200) + ")" : "");
-    function toggleSwitchBlock(id, reason) { const s = S.sw[id]; s.blocked = !s.blocked; log("cmd", "Стрілку " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true }; }
-    function toggleSectionBlock(id, reason) { const s = S.sec[id]; s.blocked = !s.blocked; log("cmd", "Ділянку " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true }; }
+    // the reason typed when blocking is kept and shown again in the unblocking window (pp. 162–163)
+    const keep = (s, reason) => { s.reason = s.blocked && reason ? String(reason).slice(0, 200) : null; };
+    function toggleSwitchBlock(id, reason) { const s = S.sw[id]; s.blocked = !s.blocked; keep(s, reason); log("cmd", "Стрілку " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true }; }
+    function toggleSectionBlock(id, reason) { const s = S.sec[id]; s.blocked = !s.blocked; keep(s, reason); log("cmd", "Ділянку " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true }; }
+    // dresina on a track, a brake shoe, consent to fencing a track (p.159; table 2.20 "Установить / Снять дрезину")
+    const FLAG = { dresina: ["Дрезину на ділянці ", " встановлено", " знято"], shoe: ["Гальмівний башмак на колії ", " встановлено", " знято"], fence: ["Згоду на огородження колії ", " надано", " — огородження знято"] };
+    function toggleSecFlag(id, flag) {
+      const s = S.sec[id], f = FLAG[flag];
+      if (!s || !f) return { ok: false, err: "невідома команда" };
+      if (!s[flag] && s.lock) { const err = "ділянка замкнена в маршруті " + s.lock; log("error", f[0] + id + ": відмова — " + err); return { ok: false, err }; }
+      if (!s[flag] && flag === "dresina" && (s.occ != null || s.wagons)) { const err = "ділянка зайнята"; log("error", f[0] + id + ": відмова — " + err); return { ok: false, err }; }
+      s[flag] = !s[flag];
+      log("cmd", f[0] + id + (s[flag] ? f[1] : f[2]));
+      return { ok: true };
+    }
     function toggleSignalBlock(id, reason) {
       const s = S.sig[id];
       if (!s.blocked && s.open) { const err = "спершу закрийте світлофор"; log("error", "Блокування " + id + ": " + err); return { ok: false, err }; }
-      s.blocked = !s.blocked; log("cmd", "Світлофор " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true };
+      s.blocked = !s.blocked; keep(s, reason); log("cmd", "Світлофор " + id + (s.blocked ? " заблоковано" + why(reason) : " розблоковано")); return { ok: true };
     }
     function artRelease(id) {
       const s = S.sec[id];
@@ -446,7 +469,15 @@
 
     // Faults for training: false occupancy of a section, loss of switch control
     function setFault(kind, id, on) {
-      if (kind === "sec") {
+      if (kind === "noinfo") {
+        // table 2.18: no information about the section — red contour; nothing may be routed over it
+        S.sec[id].noInfo = on;
+        log(on ? "warn" : "cmd", on ? "НЕСПРАВНІСТЬ: немає інформації про стан секції " + id : "Інформацію про стан секції " + id + " відновлено");
+      } else if (kind === "handle") {
+        // table 2.16: the switch handle on the panel is not in the middle position — the АРМ cannot move the switch
+        S.sw[id].handle = on;
+        log(on ? "warn" : "cmd", on ? "Рукоятка стрілки " + id + " на пульті не в середньому положенні (С)" : "Рукоятку стрілки " + id + " повернуто в середнє положення");
+      } else if (kind === "sec") {
         S.sec[id].falseOcc = on;
         log(on ? "warn" : "cmd", on ? "НЕСПРАВНІСТЬ: секція " + id + " показує зайнятість без поїзда" : "Несправність секції " + id + " усунено");
       } else {
@@ -456,7 +487,7 @@
       if (on) {
         Object.entries(S.routes).forEach(([rid, st]) => {
           const R = routeDef(rid);
-          const hit = kind === "sec" ? R.sections.includes(id) : R.switches && R.switches[id];
+          const hit = kind === "sec" || kind === "noinfo" ? R.sections.includes(id) : kind === "handle" ? false : R.switches && R.switches[id];
           if (hit && st.state === "open") { closeSignalsOf(rid); st.state = "set"; log("warn", "Світлофор " + R.from + " перекрито через несправність"); }
         });
       }
@@ -1140,8 +1171,8 @@
     reset(opts);
     return {
       setSchedule, D, get S() { return S; }, reset, step, run, setRoute, openSignal, closeSignal, cancelRoute, moveSwitch,
-      toggleSwitchLock, toggleSwitchBlock, toggleSectionBlock, toggleSignalBlock, artRelease, inviteSignal, setFault,
-      spawnLoco, removeLoco, shuntCouple, shuntUncouple, goalState, isFree, setMode, toggleFault, setDelay, addTestTrain, checkRoute, routesFrom, routeDef,
+      toggleSwitchLock, toggleSwitchBlock, toggleSectionBlock, toggleSignalBlock, toggleSecFlag, artRelease, inviteSignal, setFault,
+      spawnLoco, removeLoco, shuntCouple, shuntUncouple, goalState, isFree, setMode, setPlace, toggleFault, setDelay, addTestTrain, checkRoute, routesFrom, routeDef,
       nextEvent, isIdle, lateMin, blocksFor, fmt, on: (f) => { listeners.push(f); return () => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }; }, routeFromSignal, buildEvents: () => (S.events = buildEvents()), kindOf, findConsist,
       log: (k, t) => log(k, t), KIT_NAME, snapshot, ingest
     };

@@ -10,8 +10,8 @@
  */
 (function () {
   "use strict";
-  const MUT = ["setRoute", "openSignal", "closeSignal", "cancelRoute", "moveSwitch", "toggleSwitchLock", "toggleSwitchBlock", "toggleSectionBlock", "toggleSignalBlock",
-    "artRelease", "inviteSignal", "setFault", "spawnLoco", "removeLoco", "shuntCouple", "shuntUncouple", "setMode", "toggleFault", "setDelay", "addTestTrain", "log"];
+  const MUT = ["setRoute", "openSignal", "closeSignal", "cancelRoute", "moveSwitch", "toggleSwitchLock", "toggleSwitchBlock", "toggleSectionBlock", "toggleSignalBlock", "toggleSecFlag",
+    "artRelease", "inviteSignal", "setFault", "spawnLoco", "removeLoco", "shuntCouple", "shuntUncouple", "setMode", "setPlace", "toggleFault", "setDelay", "addTestTrain", "log"];
   const LOOKS = [{ color: "#ffffff", shape: "arrow" }, { color: "#ffd23f", shape: "cross" }, { color: "#ff6b5e", shape: "diamond" }, { color: "#36e06a", shape: "ring" }, { color: "#c58cff", shape: "square" }, { color: "#5ad8ff", shape: "tri" }];
   const PEER_URLS = ["https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js", "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"];
   const PREFIX = "armdsp-zp-";

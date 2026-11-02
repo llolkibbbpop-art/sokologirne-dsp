@@ -620,3 +620,44 @@ body, button, input, select, textarea { font-synthesis: none; -webkit-font-smoot
 .help-pl { display: none; }
 [data-lang="pl"] .help-pl { display: block; }
 [data-lang="pl"] .help-uk { display: none; }
+
+/* =====================================================================
+   АРМ ДСП per the handbook, pp. 155–163 (tables 2.16–2.21)
+   ===================================================================== */
+/* switch: lost control — both branches drawn, lines cross (table 2.16), no red contour */
+.tube-o.lost { stroke: var(--sch-line); }
+/* blocked switch — red square under the switch picture; handle not in the middle — «С» in a yellow circle */
+.sw-blk { fill: #ff2b2b; pointer-events: none; }
+.sw-handle circle { fill: #f2a81d; stroke: #000; stroke-width: 1; }
+.sw-handle text { fill: #000; font: 700 12px var(--font-mono); }
+.sw-handle { pointer-events: none; }
+/* switch sensitivity zones (fig. 2.61): a yellow frame under the pointer */
+.swz { fill: transparent; stroke: none; cursor: pointer; }
+.swz:hover { stroke: #ffd23f; stroke-width: 1.6; }
+body.picking .swz:hover { stroke: none; }
+/* pointer over a signal — turquoise frame of its sensitivity zone (pp. 159–160) */
+.sig:hover > .sw-hit { stroke: #2fd3c8; stroke-width: 1.6; }
+/* pointer over a section — its contour turns blue (p.157) */
+.tube-o.hover { stroke: #2f6bff; }
+/* no information about the section — red contour, background fill (tables 2.18, 2.19) */
+.tube-o.noinfo { stroke: var(--sch-occ); }
+.tube-i.noinfo { stroke: var(--sch-bg); }
+/* dresina on the track — the contour changes from green to blue once a second (table 2.18) */
+.tube-o.dresina { animation: dresina 2s steps(1) infinite; }
+@keyframes dresina { 0% { stroke: #3be05c; } 50% { stroke: #2f6bff; } }
+@media (prefers-reduced-motion: reduce) { .tube-o.dresina { animation: none; stroke: #3be05c; } }
+/* brake shoe / fenced track tag */
+.sec-tag rect { fill: #000; stroke: #ffd23f; stroke-width: 1.2; }
+.sec-tag text { fill: #ffd23f; font: 700 12px var(--font-mono); }
+.sec-tag { pointer-events: none; }
+/* the end of the route line — a cross (p.161) */
+.pick-xx { fill: none; stroke-width: 2.5; pointer-events: none; }
+.pick-xx.train { stroke: var(--sch-route); }
+.pick-xx.shunt { stroke: var(--sch-shunt); }
+/* right-button menu on free space: «Відміна набору» */
+.ctx-menu { position: fixed; z-index: 60; background: #d4d4d4; border: 1px solid #7a7a7a; box-shadow: 0 6px 18px rgba(0,0,0,.5); padding: 2px; min-width: 170px; }
+.ctx-menu button { display: block; width: 100%; text-align: left; background: #e4e4e4; color: #000; border: 0; border-radius: 0; padding: 5px 10px; font: 16px var(--font-ui); }
+.ctx-menu button:hover { background: #bcbcbc; }
+button.lamp-box { cursor: pointer; }
+#indPlace:not(.on) { background: transparent; }
+.blk-body textarea[readonly] { background: #e8e8e8; }
