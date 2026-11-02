@@ -44,7 +44,7 @@
       "9П": { kind: "track", len: 180, label: "Колія 9 (територія ЕЧК, тупик)" }, "10П": { kind: "track", len: 180, label: "Колія 10 (територія ЕЧК)" }
     },
     signals: [
-      { id: "М12", node: "M12n", dir: "R", kind: "shunt", note: "виїзд з колії 3а" }, { id: "М2", node: "M2n", dir: "R", kind: "shunt", note: "виїзд з під'їзної колії" },
+      { id: "М12", node: "M12n", dir: "R", kind: "shunt", side: -1, sideFixed: true, note: "виїзд з колії 3а" }, { id: "М2", node: "M2n", dir: "R", kind: "shunt", note: "виїзд з під'їзної колії" },
       { id: "М5", node: "M5n", dir: "L", kind: "shunt", note: "виїзд з території ЕЧК" }
     ],
     park: [

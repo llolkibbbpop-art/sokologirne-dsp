@@ -139,8 +139,8 @@
     sig("М4", "M4n", "L", "shunt"), sig("М2", "M2n", "L", "shunt"), sig("М6", "M6n", "R", "shunt"), sig("М10", "M10n", "R", "shunt"),
     sig("М20", "M20n", "R", "shunt"), sig("М18", "M18n", "R", "shunt", { note: "на плані перед мостом; у моделі — за мостом, у бік парку" }), sig("М16", "M16n", "R", "shunt"),
     sig("М26", "M26n", "L", "shunt", { note: "виїзд з колій 10, 61 і верхньої горловини в бік мосту" }), sig("М30", "M30n", "L", "shunt"),
-    sig("М15", "M15n", "R", "shunt"), sig("М23", "M23n", "R", "shunt"), sig("М27", "M27n", "R", "shunt"), sig("М25", "M25n", "R", "shunt"), sig("М19", "M19n", "R", "shunt"),
-    sig("М7", "M7n", "L", "shunt"), sig("М9", "M9n", "L", "shunt"), sig("М1", "M1n", "L", "shunt"), sig("М43", "M43n", "L", "shunt"), sig("М41", "M41n", "R", "shunt", { side: 1, dx: 22 })
+    sig("М15", "M15n", "R", "shunt", { nside: -1 }), sig("М23", "M23n", "R", "shunt"), sig("М27", "M27n", "R", "shunt"), sig("М25", "M25n", "R", "shunt"), sig("М19", "M19n", "R", "shunt"),
+    sig("М7", "M7n", "L", "shunt", { side: 1, sideFixed: true }), sig("М9", "M9n", "L", "shunt"), sig("М1", "M1n", "L", "shunt"), sig("М43", "M43n", "L", "shunt"), sig("М41", "M41n", "R", "shunt", { side: 1, dx: 22 })
   ];
   Object.keys(TRK).forEach((k) => { const n = k === "8" ? "8" : k; signals.push(sig("Н" + n, "L" + k, "L", "exit"), sig("Ч" + n, "R" + k, "R", "exit")); });
 

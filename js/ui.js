@@ -58,9 +58,29 @@
     if (hits(side) && !hits(-side)) side = -side;
     return (sideCache[s.id] = side);
   }
+  // a signal where the track is inclined on both sides of it is drawn along the track: the mast across the
+  // track, the lamp ahead of it; the number stays upright beside the mast, away from the line
+  function sigTilt(s) {
+    const p0 = T.nodes[s.node], sign = s.dir === "R" ? 1 : -1, nb = nbrs[s.node] || [];
+    if (!nb.length || nb.some((n) => Math.abs(T.nodes[n][1] - p0[1]) < 0.5)) return null;
+    const back = nb.find((n) => (T.nodes[n][0] - p0[0]) * sign < 0), ahead = nb.find((n) => (T.nodes[n][0] - p0[0]) * sign > 0);
+    const P = pt(s.node), B = back ? edgePts(s.node, back)[1] : null, A = ahead ? edgePts(s.node, ahead)[1] : null;
+    let tx, ty;
+    if (B) { tx = P[0] - B[0]; ty = P[1] - B[1]; } else if (A) { tx = A[0] - P[0]; ty = A[1] - P[1]; } else return null;
+    const L = Math.hypot(tx, ty) || 1; tx /= L; ty /= L;
+    let nx = -ty, ny = tx;   // the right-hand side of the movement
+    if (s.nside) { nx *= s.nside; ny *= s.nside; }
+    else if (A) { const ax = A[0] - P[0], ay = A[1] - P[1], al = Math.hypot(ax, ay) || 1; if ((ax * nx + ay * ny) / al > 0.3) { nx = -nx; ny = -ny; } }
+    return { tx, ty, nx, ny };
+  }
   function sigGeom(s) {
-    const [x0, y] = pt(s.node), x = x0 + (s.dx || 0), dir = s.dir === "R" ? 1 : -1, yy = y + sigSide(s) * 15;
-    return { x, y, yy, dir, lx: x + dir * 12 };
+    const dir = s.dir === "R" ? 1 : -1, k = sigTilt(s);
+    if (k) {
+      const [px, py] = pt(s.node), mx = px + k.nx * 15, my = py + k.ny * 15;
+      return { x: mx, y: py, yy: my, dir, lx: mx + k.tx * 12, ly: my + k.ty * 12, tilt: k };
+    }
+    const [x0, y] = pt(s.node), x = x0 + (s.dx || 0), yy = y + sigSide(s) * 15;
+    return { x, y, yy, dir, lx: x + dir * 12, ly: yy };
   }
 
   // ---------- diagram ----------
@@ -208,20 +228,32 @@
       z.addEventListener("click", (ev) => onZoneClick(s.id, leg, ev));
       ctxOn(z, { kind: "sw", id: s.id });
     }));
-    T.labels.forEach(([t, x, y]) => (el("text", { x, y: sy(y + 6) - 12, class: "trk-label" }, svg).textContent = t));
+    const autoLabels = [];
+    T.labels.forEach(([t, x, y, span]) => { const e = el("text", { x, y: sy(y + 6) - 12, class: "trk-label" }, svg); e.textContent = t; if (span) autoLabels.push([e, span]); });
+    // a track number placed automatically must not sit on a platform: slide it along its track to the nearest free place
+    const plats = [...svg.querySelectorAll("rect.platform:not([transform])")].map((r) => r.getBBox());
+    autoLabels.forEach(([e, span]) => {
+      const b = e.getBBox(); if (!b.width) return;
+      const hit = (x0) => plats.some((p) => x0 < p.x + p.width + 4 && x0 + b.width > p.x - 4 && b.y < p.y + p.height && b.y + b.height > p.y);
+      if (!hit(b.x)) return;
+      const lo = Math.min(span[0], span[1]) + 40, hi = Math.max(span[0], span[1]) - b.width - 40;
+      for (let d = 10; d < 3000; d += 10) { const x0 = [b.x - d, b.x + d].find((v) => v >= lo && v <= hi && !hit(v)); if (x0 != null) { e.setAttribute("x", x0.toFixed(0)); break; } if (b.x - d < lo && b.x + d > hi) break; }
+    });
     (V.blockLabels || []).forEach(([t, x, y, dy]) => (el("text", { x, y: sy(y) + dy, class: "blk-label" }, svg).textContent = t));
     // switches: number on the side shown on the plan; lock sign and red block square per table 2.16
     T.switches.forEach((s) => {
       const [x, y] = pt(s.node);
       const g = el("g", { class: "swg" }, svg);
       const below = s.label ? s.label > 0 : pt(s.minus)[1] < y;
-      const ty = below ? y + 21 : y - 12;
+      let ty = below ? y + 21 : y - 12;
       // keep the number off the diverging branch: shift it away when the branch runs on the label's side
       const side = below ? 1 : -1;
       const sloped = [s.plus, s.minus, s.common].map((n) => edgePts(s.node, n)[1]).find((q) => Math.sign(q[1] - y) === side);
       const away = sloped ? -Math.sign(sloped[0] - x) : 1;
-      const tx = sloped ? x + away * 14 : x;
-      el("rect", { x: tx - 13, y: below ? y + 7 : y - 26, width: 26, height: 20, class: "sw-hit" }, g);
+      let tx = sloped ? x + away * 14 : x;
+      // a number placed by hand (crowded throats, vertical necks): [x, y] of its baseline centre on the plan
+      if (s.lpos) { tx = s.lpos[0]; ty = sy(s.lpos[1]); }
+      el("rect", { x: tx - 13, y: ty - 14, width: 26, height: 20, class: "sw-hit" }, g);
       // table 2.16: position locked — a padlock beside the number; switch blocked — a red square under the
       // switch picture; the switch handle on the panel not in the middle — «С» in a yellow circle
       const t = el("text", { x: tx, y: ty, "text-anchor": "middle", class: "sw-label" }, g); t.textContent = s.id;
@@ -262,18 +294,34 @@
     });
     // signals (all of them are controllable)
     T.signals.forEach((s) => {
-      const { x, yy, dir, lx } = sigGeom(s);
+      const G = sigGeom(s), { x, yy, dir, lx, ly } = G;
       const g = el("g", { class: "sig " + s.kind }, svg);
-      el("rect", { x: Math.min(x, lx) - 24, y: yy - 12, width: 50, height: 24, class: "sw-hit" }, g); // tap area
-      el("line", { x1: x, y1: yy - 6, x2: x, y2: yy + 6, class: "mast" }, g);
-      el("line", { x1: x, y1: yy, x2: x + dir * 5, y2: yy, class: "mast" }, g);
-      const lr = s.kind === "shunt" ? 5.5 : 6;
+      const lr = s.kind === "shunt" ? 5.5 : 6, tw = 8 * s.id.length + 4;
+      let blk, t;
+      if (!G.tilt) {
+        el("rect", { x: Math.min(x, lx) - 24, y: yy - 12, width: 50, height: 24, class: "sw-hit" }, g); // tap area
+        el("line", { x1: x, y1: yy - 6, x2: x, y2: yy + 6, class: "mast" }, g);
+        el("line", { x1: x, y1: yy, x2: x + dir * 5, y2: yy, class: "mast" }, g);
+      } else {
+        const { tx, ty, nx, ny } = G.tilt;
+        el("rect", { x: Math.min(x, lx) - 16, y: Math.min(yy, ly) - 14, width: Math.abs(lx - x) + 32, height: Math.abs(ly - yy) + 28, class: "sw-hit" }, g);
+        el("line", { x1: x - nx * 6, y1: yy - ny * 6, x2: x + nx * 6, y2: yy + ny * 6, class: "mast" }, g);
+        el("line", { x1: x, y1: yy, x2: x + tx * 5, y2: yy + ty * 5, class: "mast" }, g);
+      }
       // invitation light (white, flashing) drawn as a ring around the red main light
-      const inv = el("circle", { cx: lx, cy: yy, r: lr + 2.5, class: "inv" }, g);
-      const lamp = el("circle", { cx: lx, cy: yy, r: lr, class: "lamp" }, g);
-      const tw = 8 * s.id.length + 4;
-      const blk = padlock(g, dir > 0 ? x - 6 - tw - 13 : x + tw + 6, yy - 8, 1.1);
-      const t = el("text", { x: dir > 0 ? x - 4 : x + 4, y: yy + 4, "text-anchor": dir > 0 ? "end" : "start" }, g); t.textContent = s.id;
+      const inv = el("circle", { cx: lx, cy: ly, r: lr + 2.5, class: "inv" }, g);
+      const lamp = el("circle", { cx: lx, cy: ly, r: lr, class: "lamp" }, g);
+      if (!G.tilt) {
+        blk = padlock(g, dir > 0 ? x - 6 - tw - 13 : x + tw + 6, yy - 8, 1.1);
+        t = el("text", { x: dir > 0 ? x - 4 : x + 4, y: yy + 4, "text-anchor": dir > 0 ? "end" : "start" }, g);
+      } else {
+        // the number behind the mast on the outer side; its anchor follows the side it stands on
+        const { tx, ty, nx, ny } = G.tilt, ax = x + nx * 10 - tx * 4 + (s.tdx || 0), ay = yy + ny * 10 - ty * 4 + (s.tdy || 0);
+        const anchor = nx > 0.3 ? "start" : nx < -0.3 ? "end" : "middle", by = ay + 4 + (ny > 0.3 ? 4 : ny < -0.3 ? -2 : 0);
+        blk = padlock(g, anchor === "start" ? ax + tw - 2 : anchor === "end" ? ax - tw - 11 : ax + tw / 2, by - 12, 1.1);
+        t = el("text", { x: ax, y: by, "text-anchor": anchor }, g);
+      }
+      t.textContent = s.id;
       el("title", {}, g).textContent = "Світлофор " + s.id + (s.note ? " — " + s.note : "");
       g.addEventListener("click", (ev) => onObjectClick({ kind: "sig", id: s.id }, ev));
       ctxOn(g, { kind: "sig", id: s.id });
@@ -434,7 +482,7 @@
     pickLayer.innerHTML = "";
     if (!$("pickDlg").hidden) return;
     pickLayer.innerHTML = "";
-    drawRouteLine(pickLayer, g.lx, g.yy, q.x, q.y, ui.pick.mode);
+    drawRouteLine(pickLayer, g.lx, g.ly, q.x, q.y, ui.pick.mode);
   });
   // the route line: a straight line from the start signal, the end marked with a cross (pp. 160–161)
   function drawRouteLine(layer, x1, y1, x2, y2, mode) {
@@ -443,7 +491,7 @@
     el("path", { d: `M${x2 - c},${y2 - c} L${x2 + c},${y2 + c} M${x2 - c},${y2 + c} L${x2 + c},${y2 - c}`, class: "pick-xx " + mode }, layer);
   }
   function endPoint(endId) {
-    if (D.signals[endId]) { const g = sigGeom(D.signals[endId]); return [g.lx, g.yy]; }
+    if (D.signals[endId]) { const g = sigGeom(D.signals[endId]); return [g.lx, g.ly]; }
     if (endEls[endId]) return [endEls[endId].x, endEls[endId].y];
     const sec = D.sections[endId] ? endId : Object.keys(D.sections).find((k) => D.sections[k].group === endId);
     return sec ? secMid(sec) : null;
@@ -454,7 +502,7 @@
     if (!L || !st || st.state !== "setting") { if (L || setLayer.firstChild) { ui.setLine = null; setLayer.innerHTML = ""; } return; }
     if (setLayer.firstChild) return;
     const g = sigGeom(D.signals[L.from]);
-    drawRouteLine(setLayer, g.lx, g.yy, L.to[0], L.to[1], L.mode);
+    drawRouteLine(setLayer, g.lx, g.ly, L.to[0], L.to[1], L.mode);
   }
   // «Маршрут не може бути встановлений»: the line stays; «Відміна набору» or «Продовжити» (p.161)
   function pickFail(msg) {

@@ -62,15 +62,18 @@
     const signals = (def.signals || []).map((s) => Object.assign({ side: s.dir === "R" ? 1 : -1, source: "plan" }, s));
     (def.lines || []).forEach((l) => { if (l.entry) signals.push(Object.assign({ side: l.entry.dir === "R" ? 1 : -1, kind: "entry", approachChain: (l.secs || []).map((x) => x[0]), source: "plan" }, l.entry)); });
     (def.park || []).forEach((t) => {
-      if (t.sigL) signals.push({ id: t.sigL, node: t.L, dir: "L", side: -1, kind: t.kindL || "exit", source: "plan" });
-      if (t.sigR) signals.push({ id: t.sigR, node: t.R, dir: "R", side: 1, kind: t.kindR || "exit", source: "plan" });
+      // optL / optR: drawing hints for the end signals (nside, tdx, tdy, sideFixed …)
+      if (t.sigL) signals.push(Object.assign({ id: t.sigL, node: t.L, dir: "L", side: -1, kind: t.kindL || "exit", source: "plan" }, t.optL || {}));
+      if (t.sigR) signals.push(Object.assign({ id: t.sigR, node: t.R, dir: "R", side: 1, kind: t.kindR || "exit", source: "plan" }, t.optR || {}));
     });
     const T = Object.assign({}, def.meta, {
       nodes: N, edges, sectionInfo: info, signals, markers: def.markers || [], labels: def.labels || [], view: def.view, radio: def.radio,
       switches: SW.map(([id, node, common, plus, minus, label, o]) => Object.assign({ id, node, common, plus, minus, label }, o || {})),
       endButtons: (def.lines || []).filter((l) => l.button).map((l) => l.button), routes: [], exitSignals: { odd: {}, even: {} }, entrySignal: def.entrySignal || {}
     });
-    (def.park || []).forEach((t) => T.labels.push([(t.name || t.id.replace("П", "")) + " " + t.len, t.labelX || Math.round((N[t.L][0] + N[t.R][0]) / 2 - 30), t.labelY || N[t.L][1] - 5]));
+    // a label placed automatically carries the track's x span, so the drawing may slide it off a platform
+    (def.park || []).forEach((t) => T.labels.push([(t.name || t.id.replace("П", "")) + " " + t.len, t.labelX || Math.round((N[t.L][0] + N[t.R][0]) / 2 - 30), t.labelY || N[t.L][1] - 5,
+      t.labelX ? null : [N[t.L][0], N[t.R][0]]]));
     // ---- routes by following the switches
     const adj = {}; edges.forEach(([a, b]) => { (adj[a] = adj[a] || []).push(b); (adj[b] = adj[b] || []).push(a); });
     const swN = {}; T.switches.forEach((s) => (swN[s.node] = s));
